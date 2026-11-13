@@ -7,6 +7,7 @@ export interface ButtonOptions {
   fontSize?: number;
   textColor?: string;
   radius?: number;
+  alpha?: number;
 }
 
 /** 둥근 사각형 버튼. 클릭(탭) 시 onClick 호출. */
@@ -33,6 +34,7 @@ export class Button extends Phaser.GameObjects.Container {
       fontSize: 28,
       textColor: COLORS.text,
       radius: 10,
+      alpha: 1,
       ...opts,
     };
     this.bg = scene.add.graphics();
@@ -75,7 +77,7 @@ export class Button extends Phaser.GameObjects.Container {
   private draw(fill: number): void {
     const { w, h } = this;
     this.bg.clear();
-    this.bg.fillStyle(fill, 1);
+    this.bg.fillStyle(fill, this.opts.alpha);
     this.bg.fillRoundedRect(-w / 2, -h / 2, w, h, this.opts.radius);
     this.bg.lineStyle(2, this.opts.stroke, 1);
     this.bg.strokeRoundedRect(-w / 2, -h / 2, w, h, this.opts.radius);

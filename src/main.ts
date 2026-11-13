@@ -20,7 +20,8 @@ waitFonts().then(() => {
     parent: 'game',
     backgroundColor: COLORS.bg,
     scale: {
-      mode: Phaser.Scale.FIT,
+      // 화면 비율에 맞춰 게임 영역을 넓힘 (폰 양옆 검은 여백 없음)
+      mode: Phaser.Scale.EXPAND,
       autoCenter: Phaser.Scale.CENTER_BOTH,
       width: GAME_W,
       height: GAME_H,

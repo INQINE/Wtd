@@ -46,6 +46,35 @@ export interface OperatorDef {
   /** 비행 유닛 우선 공격 */
   airPriority?: boolean;
   trait: string;
+  /** SKILLS 키 */
+  skill: string;
+}
+
+export type SpType = 'auto' | 'attack' | 'defense';
+
+export interface SkillDef {
+  id: string;
+  name: string;
+  desc: string;
+  /** SP 회복 방식: 자동(초당 1) / 공격 시 +1 / 피격 시 +1 */
+  spType: SpType;
+  spCost: number;
+  initSp: number;
+  /** 수동 발동 / SP가 차면 자동 발동 */
+  trigger: 'manual' | 'auto';
+  /** 지속 시간(초). 0 = 즉발형 */
+  duration: number;
+  atkMul?: number;
+  intervalMul?: number;
+  defMul?: number;
+  /** 지속 중 동시 공격/회복 대상 수 */
+  targets?: number;
+  /** 즉발형: 다음 공격 피해 배율 */
+  nextAttackMul?: number;
+  /** 즉발형: 자기 최대 체력 비율만큼 회복 */
+  selfHealRatio?: number;
+  /** 즉발형: 범위 안 아군 전원을 공격력 × 배율만큼 회복 */
+  healAllMul?: number;
 }
 
 export type EnemyShape = 'small' | 'circle' | 'square' | 'diamond' | 'triangle';

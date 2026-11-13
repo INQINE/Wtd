@@ -3,7 +3,8 @@
  * 화면(BattleScene)은 이 상태를 읽어서 그리기만 한다.
  * 좌표 단위는 "타일". 타일 (r, c)의 중심은 (x = c + 0.5, y = r + 0.5).
  */
-import type { Dir, EnemyDef, OperatorDef, StageDef } from '../data/types';
+import type { Dir, EnemyDef, OperatorDef, SkillDef, StageDef } from '../data/types';
+import { SKILL_MAP } from '../data/skills';
 import { rangeTiles } from '../data/ranges';
 import { calcDamage, retreatRefund } from './combat';
 import { buildRoute, isDeployable, parseMap, tileAt, type Grid, type Point } from './grid';
@@ -24,6 +25,12 @@ export interface OpUnit {
   /** "r,c" 문자열 집합 */
   rangeSet: Set<string>;
   alive: boolean;
+  skill: SkillDef;
+  sp: number;
+  /** 스킬 남은 지속 시간 (0 = 비활성) */
+  skillTime: number;
+  /** 즉발형 "다음 공격" 스킬 대기 배율 (0 = 없음) */
+  pendingMul: number;
 }
 
 export interface EnemyUnit {
@@ -62,6 +69,8 @@ export type BattleEvent =
   | { type: 'opDie'; uid: number; at: Point }
   | { type: 'leak'; uid: number; at: Point; life: number }
   | { type: 'spawn'; uid: number }
+  | { type: 'skill'; uid: number; name: string; at: Point }
+  | { type: 'skillEnd'; uid: number }
   | { type: 'end'; result: 'won' | 'lost' };
 
 export type DeployError = 'running' | 'deployed' | 'cooldown' | 'cost' | 'limit' | 'tile' | 'occupied';
@@ -102,6 +111,7 @@ export class Battle {
     readonly stage: StageDef,
     private readonly opDefs: Record<string, OperatorDef>,
     private readonly enemyDefs: Record<string, EnemyDef>,
+    private readonly skillDefs: Record<string, SkillDef> = SKILL_MAP,
   ) {
     this.grid = parseMap(stage.map);
     this.routes = Object.fromEntries(Object.entries(stage.routes).map(([k, r]) => [k, buildRoute(this.grid, r)]));
@@ -188,7 +198,13 @@ export class Battle {
       blocking: [],
       rangeSet: new Set(rangeTiles(def.range, r, c, dir).map(([rr, cc]) => key(rr, cc))),
       alive: true,
+      skill: this.skillDefs[def.skill],
+      sp: 0,
+      skillTime: 0,
+      pendingMul: 0,
     };
+    if (!op.skill) throw new Error(`알 수 없는 스킬: ${def.skill}`);
+    op.sp = op.skill.initSp;
     this.ops.push(op);
     return op;
   }
@@ -199,6 +215,87 @@ export class Battle {
     this.cost = Math.min(this.stage.maxCost, this.cost + retreatRefund(op.def.cost));
     this.removeOp(op);
     return true;
+  }
+
+  // ───────────────────────── 스킬 ─────────────────────────
+
+  /** 수동 스킬 발동 가능 여부 */
+  skillReady(op: OpUnit): boolean {
+    return op.skill.trigger === 'manual' && op.skillTime <= 0 && op.sp >= op.skill.spCost;
+  }
+
+  activateSkill(uid: number): boolean {
+    const op = this.opByUid(uid);
+    if (!op || this.state !== 'running' || !this.skillReady(op)) return false;
+    this.startSkill(op);
+    return true;
+  }
+
+  opAtk(op: OpUnit): number {
+    return op.def.atk * (op.skillTime > 0 ? (op.skill.atkMul ?? 1) : 1);
+  }
+
+  opDef(op: OpUnit): number {
+    return op.def.def * (op.skillTime > 0 ? (op.skill.defMul ?? 1) : 1);
+  }
+
+  opInterval(op: OpUnit): number {
+    return op.def.atkInterval * (op.skillTime > 0 ? (op.skill.intervalMul ?? 1) : 1);
+  }
+
+  opTargets(op: OpUnit): number {
+    return op.skillTime > 0 && op.skill.targets ? op.skill.targets : (op.def.targets ?? 1);
+  }
+
+  private startSkill(op: OpUnit): void {
+    op.skillTime = op.skill.duration;
+    op.sp = 0;
+    this.events.push({ type: 'skill', uid: op.uid, name: op.skill.name, at: { x: op.x, y: op.y } });
+  }
+
+  private gainSp(op: OpUnit, amount: number): void {
+    if (op.skillTime > 0 || op.pendingMul > 0) return;
+    op.sp = Math.min(op.skill.spCost, op.sp + amount);
+  }
+
+  private updateSkills(dt: number): void {
+    for (const op of this.ops) {
+      const sk = op.skill;
+      if (op.skillTime > 0) {
+        op.skillTime -= dt;
+        if (op.skillTime <= 0) {
+          op.skillTime = 0;
+          this.events.push({ type: 'skillEnd', uid: op.uid });
+        }
+        continue;
+      }
+      if (sk.spType === 'auto') this.gainSp(op, dt);
+      if (sk.trigger !== 'auto' || op.sp < sk.spCost || op.pendingMul > 0) continue;
+
+      if (sk.nextAttackMul) {
+        op.pendingMul = sk.nextAttackMul;
+      } else if (sk.selfHealRatio) {
+        if (op.hp < op.maxHp) {
+          op.hp = Math.min(op.maxHp, op.hp + op.maxHp * sk.selfHealRatio);
+          op.sp = 0;
+          this.events.push({ type: 'skill', uid: op.uid, name: sk.name, at: { x: op.x, y: op.y } });
+          this.events.push({ type: 'heal', srcUid: op.uid, tgtUid: op.uid, amount: Math.round(op.maxHp * sk.selfHealRatio), from: { x: op.x, y: op.y }, to: { x: op.x, y: op.y } });
+        }
+      } else if (sk.healAllMul) {
+        const hurt = this.ops.filter((o) => o.hp < o.maxHp && this.inRange(op, o.x, o.y));
+        if (hurt.length) {
+          op.sp = 0;
+          this.events.push({ type: 'skill', uid: op.uid, name: sk.name, at: { x: op.x, y: op.y } });
+          for (const t of hurt) {
+            const amount = Math.min(this.opAtk(op) * sk.healAllMul, t.maxHp - t.hp);
+            t.hp += amount;
+            this.events.push({ type: 'heal', srcUid: op.uid, tgtUid: t.uid, amount: Math.round(amount), from: { x: op.x, y: op.y }, to: { x: t.x, y: t.y } });
+          }
+        }
+      } else if (sk.duration > 0) {
+        this.startSkill(op);
+      }
+    }
   }
 
   drainEvents(): BattleEvent[] {
@@ -243,6 +340,7 @@ export class Battle {
       this.spawn(this.spawnQueue.shift()!);
     }
 
+    this.updateSkills(dt);
     this.moveEnemies(dt);
     this.enemiesAttack(dt);
     this.opsAct(dt);
@@ -363,8 +461,9 @@ export class Battle {
       }
       e.atkCd = e.def.atkInterval;
       const dmgType = e.def.damageType === 'heal' ? 'physical' : e.def.damageType;
-      const amount = Math.round(calcDamage(e.def.atk, dmgType, target.def.def, target.def.res));
+      const amount = Math.round(calcDamage(e.def.atk, dmgType, this.opDef(target), target.def.res));
       target.hp -= amount;
+      if (target.skill.spType === 'defense') this.gainSp(target, 1);
       this.events.push({
         type: 'hit',
         side: 'enemy',
@@ -388,7 +487,8 @@ export class Battle {
       if (!op.alive) continue;
       op.atkCd -= dt;
       if (op.atkCd > 0) continue;
-      const n = op.def.targets ?? 1;
+      const n = this.opTargets(op);
+      const atk = this.opAtk(op);
       const from = { x: op.x, y: op.y };
 
       if (op.def.damageType === 'heal') {
@@ -400,9 +500,10 @@ export class Battle {
           op.atkCd = 0;
           continue;
         }
-        op.atkCd = op.def.atkInterval;
+        op.atkCd = this.opInterval(op);
+        if (op.skill.spType === 'attack') this.gainSp(op, 1);
         for (const t of hurt) {
-          const amount = Math.min(op.def.atk, t.maxHp - t.hp);
+          const amount = Math.min(atk, t.maxHp - t.hp);
           t.hp += amount;
           this.events.push({ type: 'heal', srcUid: op.uid, tgtUid: t.uid, amount: Math.round(amount), from, to: { x: t.x, y: t.y } });
         }
@@ -424,15 +525,24 @@ export class Battle {
         if (blk) return blk;
         return a.distLeft - b.distLeft;
       });
-      op.atkCd = op.def.atkInterval;
+      op.atkCd = this.opInterval(op);
       const dmgType = op.def.damageType as 'physical' | 'arts' | 'true';
+      let mul = 1;
+      if (op.pendingMul > 0) {
+        mul = op.pendingMul;
+        op.pendingMul = 0;
+        op.sp = 0;
+        this.events.push({ type: 'skill', uid: op.uid, name: op.skill.name, at: from });
+      } else if (op.skill.spType === 'attack') {
+        this.gainSp(op, 1);
+      }
       for (const t of candidates.slice(0, n)) {
         const victims = op.def.splash
           ? this.enemies.filter((e) => e.alive && !e.def.air && Math.hypot(e.x - t.x, e.y - t.y) <= op.def.splash!)
           : [t];
         if (!victims.includes(t)) victims.push(t);
         for (const v of victims) {
-          const amount = Math.round(calcDamage(op.def.atk, dmgType, v.def.def, v.def.res));
+          const amount = Math.round(calcDamage(atk * mul, dmgType, v.def.def, v.def.res));
           v.hp -= amount;
           this.events.push({
             type: 'hit',

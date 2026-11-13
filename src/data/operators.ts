@@ -27,6 +27,7 @@ export const OPERATORS: OperatorDef[] = [
     range: 'melee',
     targets: 2,
     trait: '저지 중인 적 2명을 동시에 공격',
+    skill: 'burger_time',
   },
   {
     id: 'haeruseok',
@@ -48,6 +49,7 @@ export const OPERATORS: OperatorDef[] = [
     damageType: 'physical',
     range: 'melee',
     trait: '빠른 공격 속도',
+    skill: 'haeru_combo',
   },
   {
     id: 'roentgenium',
@@ -69,6 +71,7 @@ export const OPERATORS: OperatorDef[] = [
     damageType: 'physical',
     range: 'melee',
     trait: '적 3명 저지',
+    skill: 'roent_shield',
   },
   {
     id: 'deoksu',
@@ -90,6 +93,7 @@ export const OPERATORS: OperatorDef[] = [
     damageType: 'physical',
     range: 'melee',
     trait: '적 3명 저지, 낮은 코스트',
+    skill: 'deoksu_endure',
   },
   {
     id: 'viichan',
@@ -112,6 +116,7 @@ export const OPERATORS: OperatorDef[] = [
     range: 'sniper',
     airPriority: true,
     trait: '비행 유닛을 우선 공격',
+    skill: 'viichan_focus',
   },
   {
     id: 'kalikali',
@@ -134,6 +139,7 @@ export const OPERATORS: OperatorDef[] = [
     range: 'artillery',
     splash: 1.0,
     trait: '적 지상 유닛에게 범위 물리 피해',
+    skill: 'kali_barrage',
   },
   {
     id: 'lilpa',
@@ -155,6 +161,7 @@ export const OPERATORS: OperatorDef[] = [
     damageType: 'arts',
     range: 'caster',
     trait: '마법 피해 (방어력 높은 적에게 유효)',
+    skill: 'lilpa_highnote',
   },
   {
     id: 'ine',
@@ -177,6 +184,7 @@ export const OPERATORS: OperatorDef[] = [
     range: 'medic',
     targets: 3,
     trait: '아군 3명을 동시에 회복',
+    skill: 'ine_song',
   },
   {
     id: 'dopamine',
@@ -198,6 +206,7 @@ export const OPERATORS: OperatorDef[] = [
     damageType: 'heal',
     range: 'medic',
     trait: '아군 1명을 회복',
+    skill: 'dopamine_rush',
   },
 ];
 

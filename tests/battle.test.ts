@@ -151,3 +151,49 @@ describe('스테이지 0-1 밸런스 확인', () => {
     console.log(`0-1 정석 배치 결과: 방송 체력 ${b.life}/${b.maxLife}, 처치 ${b.killed}/${b.totalEnemies}`);
   });
 });
+
+describe('스킬', () => {
+  function stageWith(waves: StageDef['waves'] = [{ time: 999, enemy: 'wakdu_small', count: 1, interval: 1, route: 'main' }]): StageDef {
+    return {
+      id: 't',
+      name: 'test',
+      map: ['hhhhhhh', 'R.....B', 'hhhhhhh'],
+      initialCost: 99,
+      maxCost: 99,
+      costRate: 1,
+      maxDeploy: 8,
+      life: 3,
+      routes: { main: { start: [1, 0], end: [1, 6] } },
+      waves,
+      deck: [],
+    };
+  }
+
+  it('자동 회복 SP가 차면 수동 스킬을 쓸 수 있고, 지속 중 공격력이 오른다', () => {
+    const b = new Battle(stageWith(), OPERATOR_MAP, ENEMY_MAP);
+    const op = b.deploy('jingburger', 1, 3, 'left')!;
+    expect(b.skillReady(op)).toBe(false);
+    for (let i = 0; i < 21 * 30; i++) b.update(1 / 30);
+    expect(b.skillReady(op)).toBe(true);
+    expect(b.activateSkill(op.uid)).toBe(true);
+    expect(b.opAtk(op)).toBeCloseTo(640 * 1.6);
+    expect(b.opTargets(op)).toBe(3);
+    for (let i = 0; i < 16 * 30; i++) b.update(1 / 30);
+    expect(op.skillTime).toBe(0);
+    expect(b.opAtk(op)).toBe(640);
+  });
+
+  it('공격 회복형 즉발 스킬은 다음 공격을 강화한다', () => {
+    const b = new Battle(stageWith([{ time: 0, enemy: 'wakdu_armored', count: 1, interval: 1, route: 'main' }]), OPERATOR_MAP, ENEMY_MAP);
+    const op = b.deploy('haeruseok', 1, 2, 'left')!;
+    op.hp = op.maxHp = 1e9;
+    const hits: number[] = [];
+    for (let i = 0; i < 20 * 30; i++) {
+      b.update(1 / 30);
+      for (const e of b.drainEvents()) if (e.type === 'hit' && e.side === 'op') hits.push(e.amount);
+    }
+    // 철갑 왁두(방어 750) 상대로 평타는 최소 피해, 강화타는 큰 피해
+    expect(Math.min(...hits)).toBe(Math.round(470 * 0.05));
+    expect(Math.max(...hits)).toBe(Math.round(470 * 2.3 - 750));
+  });
+});
