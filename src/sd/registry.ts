@@ -17,6 +17,13 @@ export interface SDImageEntry {
   tip?: [number, number];
   /** 공격 이펙트 색 ("#rrggbb") */
   fxColor?: string;
+  /** 일반 캐릭터 그림 (스탠딩 일러스트) — 메인 화면 비서 등에 사용 */
+  art?: {
+    file: string;
+    facing: 'left' | 'right';
+    /** 아래가 잘린 구도(허벅지까지 등)면 화면 아래에 붙여서 표시 */
+    croppedBottom: boolean;
+  };
   /** 공격 동작 스프라이트 시트 (가로 한 줄) */
   attack?: {
     file: string;
@@ -36,6 +43,7 @@ let manifest: Record<string, SDImageEntry> = {};
 
 export const sdImageKey = (id: string) => `sdimg-${id}`;
 export const sdAttackKey = (id: string) => `sdimg-${id}-attack`;
+export const sdArtKey = (id: string) => `sdart-${id}`;
 
 /** BootScene preload에서 호출 */
 export function queueSDManifest(scene: Phaser.Scene): void {
@@ -47,6 +55,7 @@ export function queueSDImages(scene: Phaser.Scene): void {
   manifest = (scene.cache.json.get('sd-manifest') as Record<string, SDImageEntry>) ?? {};
   for (const [id, e] of Object.entries(manifest)) {
     scene.load.image(sdImageKey(id), `assets/sd/${e.file}`);
+    if (e.art) scene.load.image(sdArtKey(id), `assets/sd/${e.art.file}`);
     if (e.attack) {
       scene.load.spritesheet(sdAttackKey(id), `assets/sd/${e.attack.file}`, {
         frameWidth: e.attack.frameWidth,
@@ -59,4 +68,10 @@ export function queueSDImages(scene: Phaser.Scene): void {
 export function sdImageFor(scene: Phaser.Scene, id: string): SDImageEntry | null {
   const e = manifest[id];
   return e && scene.textures.exists(sdImageKey(id)) ? e : null;
+}
+
+/** 멤버의 일반 캐릭터 그림 (없으면 null) */
+export function artFor(scene: Phaser.Scene, id: string): (NonNullable<SDImageEntry['art']> & { key: string }) | null {
+  const e = manifest[id];
+  return e?.art && scene.textures.exists(sdArtKey(id)) ? { ...e.art, key: sdArtKey(id) } : null;
 }

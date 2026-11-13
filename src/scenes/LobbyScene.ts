@@ -6,7 +6,7 @@ import Phaser from 'phaser';
 import { OPERATOR_MAP, OPERATORS } from '../data/operators';
 import type { OperatorDef } from '../data/types';
 import { createSDView, type SDView } from '../sd/factory';
-import { sdImageFor } from '../sd/registry';
+import { artFor, sdImageFor } from '../sd/registry';
 import { textStyle } from '../ui/theme';
 
 const INK = '#16181d';
@@ -34,6 +34,10 @@ interface PanelOpts {
 
 export class LobbyScene extends Phaser.Scene {
   private secretary?: SDView;
+  /** 일반 캐릭터 그림 (있으면 SD 대신 사용) */
+  private art?: Phaser.GameObjects.Image;
+  private artBaseY = 0;
+  private artScale = 1;
   private bubble!: Phaser.GameObjects.Container;
   private bubbleText!: Phaser.GameObjects.Text;
   private lineIdx = 0;
@@ -71,6 +75,12 @@ export class LobbyScene extends Phaser.Scene {
 
   update(time: number): void {
     this.secretary?.tick(time);
+    if (this.art) {
+      // 일러스트 숨쉬기: 아주 살짝 위아래 + 세로로 늘었다 줄었다
+      const b = Math.sin(time / 1000 * 1.6);
+      this.art.y = this.artBaseY + b * 3;
+      this.art.scaleY = this.artScale * (1 + b * 0.004);
+    }
   }
 
   // ───────────────────────── 배경 ─────────────────────────
@@ -134,19 +144,43 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private createSecretary(W: number, H: number, u: number): void {
-    const x = W * 0.27;
+    const art = artFor(this, this.secDef.id);
+    let x = W * 0.27;
     const y = H * 0.94;
-    const shadow = this.add.ellipse(x, y, 360 * u, 50 * u, 0x000000, 0.35);
-    void shadow;
-    this.secretary = createSDView(this, this.secDef).setPosition(x, y).setHeightPx(H * 0.7);
-    const zone = this.add.zone(x, y - H * 0.35, H * 0.4, H * 0.7).setInteractive({ useHandCursor: true });
-    zone.on('pointerdown', () => {
-      this.secretary?.playAttack(this.time.now);
-      this.say();
-    });
+    let bubbleX = x - 250 * u;
+    let bubbleY = H * 0.235;
+    if (art) {
+      // 일반 캐릭터 그림: 화면 아래에 붙여 크게 (아래가 잘린 구도면 화면 밖까지)
+      x = W * 0.29;
+      const img = this.add.image(x, H, art.key).setOrigin(0.5, 1);
+      const targetH = art.croppedBottom ? H * 0.93 : H * 0.88;
+      this.artScale = targetH / img.height;
+      img.setScale(this.artScale).setFlipX(art.facing === 'left');
+      this.artBaseY = art.croppedBottom ? H + 2 : H * 0.97;
+      img.y = this.artBaseY;
+      this.art = img;
+      // 왼쪽에서 살짝 밀려 들어오며 나타남
+      img.setAlpha(0).x -= 60 * u;
+      this.tweens.add({ targets: img, x, alpha: 1, duration: 500, ease: 'Cubic.out' });
+      img.setInteractive({ useHandCursor: true, pixelPerfect: true, alphaTolerance: 40 });
+      img.on('pointerdown', () => {
+        this.tweens.add({ targets: img, scaleX: this.artScale * 1.015, duration: 90, yoyo: true });
+        this.say();
+      });
+      bubbleX = x - img.displayWidth * 0.62;
+      bubbleY = H * 0.5;
+    } else {
+      this.add.ellipse(x, y, 360 * u, 50 * u, 0x000000, 0.35);
+      this.secretary = createSDView(this, this.secDef).setPosition(x, y).setHeightPx(H * 0.7);
+      const zone = this.add.zone(x, y - H * 0.35, H * 0.4, H * 0.7).setInteractive({ useHandCursor: true });
+      zone.on('pointerdown', () => {
+        this.secretary?.playAttack(this.time.now);
+        this.say();
+      });
+    }
 
     // 대사 말풍선
-    this.bubble = this.add.container(x - 250 * u, H * 0.235).setAlpha(0);
+    this.bubble = this.add.container(Math.max(24 * u, bubbleX), bubbleY).setAlpha(0);
     const bw = 440 * u;
     const bh = 96 * u;
     const bg = this.add.graphics();

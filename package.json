@@ -11,12 +11,14 @@
     "typecheck": "tsc --noEmit",
     "sd:import": "node scripts/sd-import.mjs",
     "sd:generate": "NODE_USE_ENV_PROXY=1 node --no-warnings scripts/sd-generate.mjs",
-    "build:web": "node scripts/build-web.mjs"
+    "build:web": "node scripts/build-web.mjs",
+    "art:import": "node scripts/art-import.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
     "sharp": "^0.33.5",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

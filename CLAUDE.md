@@ -6,6 +6,16 @@
 - https://claude.ai/artifact/D3hZRwVVyL3iHKahgGpw95 — 업데이트할 때마다 같은 링크로 재게시
 - `npm run build:web` → `.artifact/index.html` + `dist/` 파일을 Artifact 도구로 같은 경로(file_path)에 publish
 
+## 캐릭터 그림 2종 (사용자 확정)
+모든 캐릭터는 기본 프로필 그림을 **2개** 갖는다.
+| 종류 | 용도 | 가져오기 |
+|---|---|---|
+| **SD** (치비) | 전투 유닛, 덱 카드, 정보창, SD 도감 | `npm run sd:import -- <그림> <id>` |
+| **일반 캐릭터 그림** (스탠딩 일러스트) | **메인 화면 비서** | `npm run art:import -- <그림> <id>` (AI 배경 제거, 복잡한 배경도 가능) |
+- 일반 그림이 없으면 메인 화면에 SD가 대신 나온다.
+- art-import의 배경 제거 모델(@imgly)은 sharp 버전 충돌 때문에 `scripts/rmbg-worker.mjs` 별도 프로세스에서 돈다.
+- 모델이 남긴 배경 조각은 `--erase "x0,y0,x1,y1,#색,허용치"` 로 정리.
+
 ## SD 캐릭터 표준 방식 (사용자 확정)
 1. 사용자가 멤버 사진을 올림 → `docs/SD_프롬프트/<이름>.md`에 전용 프롬프트 작성 (그림체 레퍼런스: `.sd-ref/style-sheet.png`)
 2. 사용자가 무료 앱(Gemini/ChatGPT)으로 **대기 SD 그림 1장**을 생성해 올림 — 배경은 투명 PNG 또는 초록(#00FF00)/마젠타 단색 (흰 배경 금지)

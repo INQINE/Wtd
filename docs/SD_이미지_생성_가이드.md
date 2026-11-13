@@ -159,3 +159,29 @@ Background (important — the image will be cut out automatically):
 ```
 
 > 프레임 시트(`--attack --frames N --grid CxR`)도 기술적으로는 지원하지만, 기본으로는 쓰지 않는다.
+
+
+---
+
+## 6. 일반 캐릭터 그림 (스탠딩 일러스트)
+
+캐릭터마다 그림을 **2개** 둔다: 전투용 **SD** + 메인 화면용 **일반 캐릭터 그림**.
+
+- 일반 그림은 팬아트·공식 일러스트·생성 그림 무엇이든 된다. 배경이 복잡해도 AI 배경 제거로 인물만 분리한다.
+- 권장: 세로로 긴 그림, 허벅지 위 또는 전신, 얼굴이 위쪽 1/3 안에 오는 구도.
+- 가져오기:
+  ```bash
+  npm run art:import -- <그림> <멤버id> [--facing left] [--erase "x0,y0,x1,y1,#rrggbb,70"]
+  ```
+  결과는 `public/assets/sd/<id>-art.png`, manifest의 `art` 항목. 아래가 잘린 구도면 화면 아래에 붙여 크게 보여준다.
+
+### 일반 그림을 새로 생성할 때 프롬프트 (선택)
+```
+Using the attached character as the exact model, draw a polished anime character illustration (gacha game standing art).
+- thigh-up or full-body standing pose, facing slightly right, confident relaxed expression
+- keep the hairstyle, hair color, eye color, outfit and accessories of the character
+- clean lineart, soft cel shading with gentle gradients, high detail
+- vertical composition, the head in the upper third, nothing important cut off except below the thighs
+- PNG with a REAL transparent background (not a drawn checkerboard). If not possible, a flat solid #00FF00 background.
+- no text, no frame, no other characters
+```
