@@ -35,17 +35,25 @@
 | **NovelAI / niji journey** | 애니메이션 그림체 특화, 퀄리티 높음 | 유료, 사진 기반 변환은 덜 직관적 | 그림체 퀄리티가 최우선일 때 |
 | **Stable Diffusion (ComfyUI)** 로컬 | 치비 스타일 모델 + 레퍼런스 고정(IP-Adapter)으로 **모든 멤버 그림체 통일**이 가장 잘 됨, 무제한 | NVIDIA 그래픽카드 PC가 필요하고 설정이 어려움 | 멤버가 많아져서 통일감이 중요할 때 |
 
-### 자동화 (설정 완료: OpenAI API)
-OpenAI API 키가 이 저장소 전용 클라우드 환경(`Wtd`)에 저장되어 있어서, Claude가 직접 생성해 게임에 넣는다.
-- 키는 환경의 보안 저장소에만 있고 저장소/코드에는 없다. 요청할 때 네트워크 프록시가 넣어준다.
-- 이미지 1장마다 API 사용료가 든다 (OpenAI 결제 페이지에서 크레딧 충전 필요).
+### 자동화 (Gemini API, OpenAI도 지원)
+API 키를 이 저장소 전용 클라우드 환경(`Wtd`)의 **Network secrets**에 저장해 두면, Claude가 직접 생성해서 게임에 넣는다.
+
+| 서비스 | Host | Header | 값 |
+|---|---|---|---|
+| Gemini (기본) | `generativelanguage.googleapis.com` | `x-goog-api-key` | AI Studio에서 발급한 키 |
+| OpenAI | `api.openai.com` | `Authorization` | `Bearer <키>` |
+
+- 키는 환경의 보안 저장소에만 있고, 저장소나 코드에는 없다. 요청을 보낼 때 네트워크 프록시가 키를 넣어준다.
+- 이미지 1장마다 API 사용료(또는 무료 한도)가 든다.
 
 ```bash
 npm run sd:generate -- <멤버id> --photo 사진1.png,사진2.jpg --class caster --weapon "microphone staff" --n 2
-npm run sd:generate -- <멤버id> --desc "보라색 긴 머리, ..." --class medic   # 사진 없이 설명만으로
+npm run sd:generate -- <멤버id> --desc "보라색 긴 머리, ..." --class medic      # 사진 없이 설명만으로
+npm run sd:generate -- <멤버id> --photo 사진.png --provider openai               # OpenAI로 생성
 ```
-- 레퍼런스 그림체 시트는 `.sd-ref/style-sheet.png`, 생성 원본은 `.sd-ref/`·`.sd-raw/`에 저장된다 (둘 다 git 제외).
-- `--n 2`로 후보를 여러 장 만들면 첫 장이 자동으로 들어가고, 다른 후보는 `npm run sd:import -- .sd-raw/<파일> <멤버id>`로 바꿀 수 있다.
+- Gemini는 사용 가능한 최신 이미지 모델을 자동으로 고른다 (`--model`로 직접 지정 가능).
+- 레퍼런스 그림체 시트는 `.sd-ref/style-sheet.png`, 생성 원본은 `.sd-raw/`에 저장된다 (둘 다 git 제외).
+- `--n 2`로 후보를 여러 장 만들면 첫 장이 자동으로 들어간다. 다른 후보로 바꾸려면 `npm run sd:import -- .sd-raw/<파일> <멤버id>`.
 
 ---
 

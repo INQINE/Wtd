@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * OpenAI 이미지 API로 SD 스프라이트 생성 → 자동으로 게임에 가져오기
+ * 이미지 생성 API(Gemini 기본 / OpenAI)로 SD 스프라이트 생성 → 자동으로 게임에 가져오기
  *
  *   node scripts/sd-generate.mjs <멤버id> [옵션]
  *     --photo a.png,b.jpg   캐릭터 사진/일러스트 (여러 장 가능)
@@ -10,10 +10,12 @@
  *     --n 2                 후보 개수
  *     --quality high        low | medium | high
  *     --no-import           생성만 하고 게임에 넣지 않음
+ *     --provider gemini     gemini(기본) | openai
+ *     --model <이름>        모델 직접 지정 (기본: 사용 가능한 최신 이미지 모델 자동 선택)
  *
  * 레퍼런스 그림체: .sd-ref/style-sheet.png (git 제외)
  * 생성 원본: .sd-raw/ (git 제외)
- * API 키: 환경변수 OPENAI_API_KEY 또는 프록시 주입
+ * API 키: 환경변수 GEMINI_API_KEY / OPENAI_API_KEY, 또는 클라우드 환경의 네트워크 프록시 주입
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,7 +36,8 @@ const desc = opt('desc', '');
 const cls = opt('class', 'guard');
 const n = Number(opt('n', '1'));
 const quality = opt('quality', 'high');
-const model = opt('model', 'gpt-image-2');
+const provider = opt('provider', 'gemini');
+const modelOpt = opt('model', '');
 const doImport = !args.includes('--no-import');
 
 const WEAPONS = {
@@ -78,58 +81,115 @@ Output:
 - exactly one character, centered, entire body visible including feet, with margin around it
 - transparent background, no ground shadow, no text, no border, no other characters`;
 
-const form = new FormData();
-form.append('model', model);
-form.append('prompt', prompt);
-form.append('n', String(n));
-form.append('size', '1024x1024');
-form.append('quality', quality);
-form.append('background', 'transparent');
-form.append('output_format', 'png');
-const addFile = (p) => {
+const readImage = (p) => {
   const buf = fs.readFileSync(p);
   const ext = path.extname(p).slice(1).toLowerCase().replace('jpg', 'jpeg');
-  form.append('image[]', new Blob([buf], { type: `image/${ext}` }), path.basename(p));
+  return { buf, mime: `image/${ext}`, name: path.basename(p) };
 };
-photos.forEach(addFile);
-addFile(REF);
-
-console.log(`생성 중... (${model}, ${n}장, ${quality})`);
+const inputs = [...photos, REF].map(readImage);
 const t0 = Date.now();
-const call = (body) =>
-  fetch('https://api.openai.com/v1/images/edits', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY || 'proxy-injected'}` },
-    body,
-  });
-let res = await call(form);
-let json = await res.json();
-// 모델이 투명 배경을 지원하지 않으면 흰 배경으로 다시 요청 (가져올 때 배경 자동 제거)
-if (!res.ok && /background|transparen/i.test(json.error?.message ?? '')) {
-  console.log('투명 배경 미지원 → 흰 배경으로 재시도');
-  form.delete('background');
-  form.set('prompt', prompt.replace('transparent background', 'plain pure white background'));
-  res = await call(form);
-  json = await res.json();
-}
-if (res.status === 429 && /credit|quota|billing/i.test(json.error?.message ?? '')) {
-  console.error('OpenAI 크레딧이 없습니다. https://platform.openai.com/settings/organization/billing 에서 충전해 주세요.');
-  process.exit(2);
-}
-if (!res.ok) {
-  console.error('API 오류:', res.status, json.error?.message ?? JSON.stringify(json));
+/** @type {Buffer[]} */
+let images = [];
+
+function fail(status, msg) {
+  if (status === 429 && /credit|quota|billing|exhausted/i.test(msg)) {
+    console.error(`사용량/크레딧 한도에 걸렸습니다: ${msg}`);
+    process.exit(2);
+  }
+  if (status === 401 || status === 403) {
+    console.error(`API 키가 없거나 거부되었습니다 (${status}): ${msg}`);
+    process.exit(3);
+  }
+  console.error('API 오류:', status, msg);
   process.exit(1);
 }
+
+if (provider === 'gemini') {
+  const KEY = process.env.GEMINI_API_KEY || 'proxy-injected';
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+  const headers = { 'x-goog-api-key': KEY, 'Content-Type': 'application/json' };
+  let model = modelOpt;
+  if (!model) {
+    // 사용 가능한 이미지 생성 모델 중 최신/상위 모델 자동 선택
+    const r = await fetch(`${BASE}/models?pageSize=200`, { headers });
+    const j = await r.json();
+    if (!r.ok) fail(r.status, j.error?.message ?? JSON.stringify(j));
+    const names = (j.models ?? [])
+      .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent') && /image/i.test(m.name) && !/imagen/i.test(m.name))
+      .map((m) => m.name.replace('models/', ''));
+    const score = (n) => (/pro/.test(n) ? 100 : 0) + parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/) ?? [0, 0])[1]) * 10 - (/preview|exp/.test(n) ? 1 : 0);
+    names.sort((x, y) => score(y) - score(x));
+    if (!names.length) fail(404, '이미지 생성이 가능한 Gemini 모델을 찾지 못했습니다.');
+    model = names[0];
+    console.log('사용 가능한 이미지 모델:', names.join(', '));
+  }
+  const geminiPrompt = prompt.replace('transparent background', 'plain pure white background');
+  console.log(`생성 중... (Gemini ${model}, ${n}장)`);
+  for (let i = 0; i < n; i++) {
+    const body = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            ...inputs.map((im) => ({ inline_data: { mime_type: im.mime === 'image/webp' ? 'image/webp' : im.mime, data: im.buf.toString('base64') } })),
+            { text: geminiPrompt },
+          ],
+        },
+      ],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '1:1' } },
+    };
+    const r = await fetch(`${BASE}/models/${model}:generateContent`, { method: 'POST', headers, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) fail(r.status, j.error?.message ?? JSON.stringify(j));
+    const parts = j.candidates?.[0]?.content?.parts ?? [];
+    const img = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
+    if (!img) {
+      const text = parts.map((p) => p.text).filter(Boolean).join(' ');
+      fail(500, `이미지가 반환되지 않았습니다. ${j.candidates?.[0]?.finishReason ?? ''} ${text}`.trim());
+    }
+    images.push(Buffer.from((img.inlineData ?? img.inline_data).data, 'base64'));
+    if (j.usageMetadata) console.log('  사용량:', JSON.stringify(j.usageMetadata));
+  }
+} else {
+  const model = modelOpt || 'gpt-image-2';
+  const form = new FormData();
+  form.append('model', model);
+  form.append('prompt', prompt);
+  form.append('n', String(n));
+  form.append('size', '1024x1024');
+  form.append('quality', quality);
+  form.append('background', 'transparent');
+  form.append('output_format', 'png');
+  for (const im of inputs) form.append('image[]', new Blob([im.buf], { type: im.mime }), im.name);
+  console.log(`생성 중... (OpenAI ${model}, ${n}장, ${quality})`);
+  const call = (body) =>
+    fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY || 'proxy-injected'}` },
+      body,
+    });
+  let res = await call(form);
+  let json = await res.json();
+  if (!res.ok && /background|transparen/i.test(json.error?.message ?? '')) {
+    console.log('투명 배경 미지원 → 흰 배경으로 재시도');
+    form.delete('background');
+    form.set('prompt', prompt.replace('transparent background', 'plain pure white background'));
+    res = await call(form);
+    json = await res.json();
+  }
+  if (!res.ok) fail(res.status, json.error?.message ?? JSON.stringify(json));
+  images = json.data.map((d) => Buffer.from(d.b64_json, 'base64'));
+}
+
 fs.mkdirSync('.sd-raw', { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const outs = json.data.map((d, i) => {
+const outs = images.map((buf, i) => {
   const p = path.resolve('.sd-raw', `${id}-${stamp}-${i + 1}.png`);
-  fs.writeFileSync(p, Buffer.from(d.b64_json, 'base64'));
+  fs.writeFileSync(p, buf);
   return p;
 });
 console.log(`완료 (${((Date.now() - t0) / 1000).toFixed(0)}초)`);
 outs.forEach((p) => console.log('  원본:', path.relative(process.cwd(), p)));
-if (json.usage) console.log('  사용량:', JSON.stringify(json.usage));
 
 if (doImport) {
   execFileSync('node', ['scripts/sd-import.mjs', outs[0], id], { stdio: 'inherit' });
