@@ -40,11 +40,11 @@ API 키를 이 저장소 전용 클라우드 환경(`Wtd`)의 **Network secrets*
 
 | 서비스 | Host | Header | 값 |
 |---|---|---|---|
-| Gemini (기본) | `generativelanguage.googleapis.com` | `x-goog-api-key` | AI Studio에서 발급한 키 |
+| Gemini (기본) | `generativelanguage.googleapis.com` | `Authorization` | `Bearer <키>` (Gemini의 OpenAI 호환 주소 사용) |
 | OpenAI | `api.openai.com` | `Authorization` | `Bearer <키>` |
 
 - 키는 환경의 보안 저장소에만 있고, 저장소나 코드에는 없다. 요청을 보낼 때 네트워크 프록시가 키를 넣어준다.
-- 이미지 1장마다 API 사용료(또는 무료 한도)가 든다.
+- 이미지 1장마다 API 사용료가 든다. Gemini 이미지 모델은 유료 등급 전용이라 AI Studio에서 결제 설정이 필요하다 (https://aistudio.google.com/billing).
 
 ```bash
 npm run sd:generate -- <멤버id> --photo 사진1.png,사진2.jpg --class caster --weapon "microphone staff" --n 2

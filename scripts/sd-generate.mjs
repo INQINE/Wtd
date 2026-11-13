@@ -92,8 +92,8 @@ const t0 = Date.now();
 let images = [];
 
 function fail(status, msg) {
-  if (status === 429 && /credit|quota|billing|exhausted/i.test(msg)) {
-    console.error(`사용량/크레딧 한도에 걸렸습니다: ${msg}`);
+  if (/credit|quota|billing|exhausted|free tier/i.test(msg)) {
+    console.error(`결제/크레딧 설정이 필요합니다: ${msg}`);
     process.exit(2);
   }
   if (status === 401 || status === 403) {
@@ -104,19 +104,28 @@ function fail(status, msg) {
   process.exit(1);
 }
 
+/** 응답 JSON 어디에 있든 base64 이미지를 찾아낸다 (호환 API는 응답 형식이 모델마다 다를 수 있음) */
+function findImages(obj, out = []) {
+  if (typeof obj === 'string') {
+    const m = obj.match(/data:image\/[a-z]+;base64,([A-Za-z0-9+/=]+)/g);
+    if (m) m.forEach((d) => out.push(Buffer.from(d.split(',')[1], 'base64')));
+    else if (obj.length > 2000 && /^[A-Za-z0-9+/=\s]+$/.test(obj)) out.push(Buffer.from(obj, 'base64'));
+  } else if (Array.isArray(obj)) obj.forEach((v) => findImages(v, out));
+  else if (obj && typeof obj === 'object') Object.values(obj).forEach((v) => findImages(v, out));
+  return out;
+}
+
 if (provider === 'gemini') {
-  const KEY = process.env.GEMINI_API_KEY || 'proxy-injected';
-  const BASE = 'https://generativelanguage.googleapis.com/v1beta';
-  const headers = { 'x-goog-api-key': KEY, 'Content-Type': 'application/json' };
+  // Gemini의 OpenAI 호환 주소: 키를 Authorization: Bearer 로 받는다 (클라우드 환경 프록시가 주입)
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta/openai';
+  const headers = { Authorization: `Bearer ${process.env.GEMINI_API_KEY || 'proxy-injected'}`, 'Content-Type': 'application/json' };
+  const unwrap = (j) => (Array.isArray(j) ? j[0] : j);
   let model = modelOpt;
   if (!model) {
-    // 사용 가능한 이미지 생성 모델 중 최신/상위 모델 자동 선택
-    const r = await fetch(`${BASE}/models?pageSize=200`, { headers });
-    const j = await r.json();
+    const r = await fetch(`${BASE}/models`, { headers });
+    const j = unwrap(await r.json());
     if (!r.ok) fail(r.status, j.error?.message ?? JSON.stringify(j));
-    const names = (j.models ?? [])
-      .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent') && /image/i.test(m.name) && !/imagen/i.test(m.name))
-      .map((m) => m.name.replace('models/', ''));
+    const names = (j.data ?? []).map((m) => m.id.replace('models/', '')).filter((n) => /gemini.*image/.test(n) && !/lite/.test(n));
     const score = (n) => (/pro/.test(n) ? 100 : 0) + parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/) ?? [0, 0])[1]) * 10 - (/preview|exp/.test(n) ? 1 : 0);
     names.sort((x, y) => score(y) - score(x));
     if (!names.length) fail(404, '이미지 생성이 가능한 Gemini 모델을 찾지 못했습니다.');
@@ -127,28 +136,28 @@ if (provider === 'gemini') {
   console.log(`생성 중... (Gemini ${model}, ${n}장)`);
   for (let i = 0; i < n; i++) {
     const body = {
-      contents: [
+      model,
+      messages: [
         {
           role: 'user',
-          parts: [
-            ...inputs.map((im) => ({ inline_data: { mime_type: im.mime === 'image/webp' ? 'image/webp' : im.mime, data: im.buf.toString('base64') } })),
-            { text: geminiPrompt },
+          content: [
+            ...inputs.map((im) => ({ type: 'image_url', image_url: { url: `data:${im.mime};base64,${im.buf.toString('base64')}` } })),
+            { type: 'text', text: geminiPrompt },
           ],
         },
       ],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '1:1' } },
     };
-    const r = await fetch(`${BASE}/models/${model}:generateContent`, { method: 'POST', headers, body: JSON.stringify(body) });
-    const j = await r.json();
+    const r = await fetch(`${BASE}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+    const j = unwrap(await r.json());
     if (!r.ok) fail(r.status, j.error?.message ?? JSON.stringify(j));
-    const parts = j.candidates?.[0]?.content?.parts ?? [];
-    const img = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
-    if (!img) {
-      const text = parts.map((p) => p.text).filter(Boolean).join(' ');
-      fail(500, `이미지가 반환되지 않았습니다. ${j.candidates?.[0]?.finishReason ?? ''} ${text}`.trim());
+    const found = findImages(j.choices ?? j);
+    if (!found.length) {
+      fs.mkdirSync('.sd-raw', { recursive: true });
+      fs.writeFileSync('.sd-raw/last-response.json', JSON.stringify(j, null, 2));
+      fail(500, '응답에서 이미지를 찾지 못했습니다 (.sd-raw/last-response.json 확인)');
     }
-    images.push(Buffer.from((img.inlineData ?? img.inline_data).data, 'base64'));
-    if (j.usageMetadata) console.log('  사용량:', JSON.stringify(j.usageMetadata));
+    images.push(found[0]);
+    if (j.usage) console.log('  사용량:', JSON.stringify(j.usage));
   }
 } else {
   const model = modelOpt || 'gpt-image-2';
