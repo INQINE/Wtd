@@ -70,14 +70,20 @@ function removeBg(px, W, H) {
       stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
     }
   }
-  for (let y = 1; y < H - 1; y++)
-    for (let x = 1; x < W - 1; x++) {
-      const k = at(x, y);
-      if (px[k + 3] === 0) continue;
-      if (![at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)].some((n) => px[n + 3] === 0)) continue;
-      const d = Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]);
-      if (d < tol * 2.5) px[k + 3] = Math.round(255 * Math.min(1, d / (tol * 2.5)));
-    }
+  // 가장자리 정리: 투명 영역에 닿은 밝은(배경색에 가까운) 픽셀을 2겹까지 반투명/투명 처리 → 흰 테두리 제거
+  const edgeTol = Math.max(tol * 2.5, 70);
+  for (let pass = 0; pass < 2; pass++) {
+    const fade = [];
+    for (let y = 1; y < H - 1; y++)
+      for (let x = 1; x < W - 1; x++) {
+        const k = at(x, y);
+        if (px[k + 3] === 0) continue;
+        if (![at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)].some((n) => px[n + 3] < 128)) continue;
+        const d = Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]);
+        if (d < edgeTol) fade.push([k, Math.round(px[k + 3] * Math.pow(d / edgeTol, 1.5))]);
+      }
+    for (const [k, a] of fade) px[k + 3] = a;
+  }
 }
 
 /**
@@ -153,20 +159,66 @@ async function importAttackSheet() {
   const [gc, gr] = (opt('grid', `${frames}x1`)).split('x').map(Number);
   const fps = Number(opt('fps', '10'));
   const durations = opt('durations', '0.09,0.16,0.2,0.24').split(',').map(Number);
-  const meta = await sharp(input).metadata();
-  const cw = Math.floor(meta.width / gc);
-  const ch = Math.floor(meta.height / gr);
+  // 전체 그림의 배경을 먼저 지우고, 칸 경계는 "그림이 없는 빈 줄"을 찾아서 정한다
+  // (생성 그림은 칸 크기가 정확히 같지 않아서, 똑같이 자르면 지팡이 끝 등이 잘림)
+  const { data: allData, info: allInfo } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const AW = allInfo.width;
+  const AH = allInfo.height;
+  const all = new Uint8ClampedArray(allData);
+  removeBg(all, AW, AH);
+  const filled = (x, y) => all[(y * AW + x) * 4 + 3] > 24;
+  const findCut = (expected, span, count) => {
+    // expected 주변 ±span 범위에서 그림이 가장 적은 줄 (같으면 expected에 가까운 쪽)
+    let best = expected;
+    let bestScore = Infinity;
+    for (let p = Math.max(1, expected - span); p <= expected + span; p++) {
+      const sc = count(p) * 1000 + Math.abs(p - expected);
+      if (sc < bestScore) {
+        bestScore = sc;
+        best = p;
+      }
+    }
+    return best;
+  };
+  const rowCuts = [0];
+  for (let r = 1; r < gr; r++) {
+    rowCuts.push(
+      findCut(Math.round((AH * r) / gr), Math.round(AH / gr / 4), (y) => {
+        let n = 0;
+        for (let x = 0; x < AW; x++) if (filled(x, y)) n++;
+        return n;
+      }),
+    );
+  }
+  rowCuts.push(AH);
+  const cellRects = [];
+  for (let r = 0; r < gr; r++) {
+    const y0 = rowCuts[r];
+    const y1 = rowCuts[r + 1];
+    const colCuts = [0];
+    for (let c = 1; c < gc; c++) {
+      colCuts.push(
+        findCut(Math.round((AW * c) / gc), Math.round(AW / gc / 4), (x) => {
+          let n = 0;
+          for (let y = y0; y < y1; y++) if (filled(x, y)) n++;
+          return n;
+        }),
+      );
+    }
+    colCuts.push(AW);
+    for (let c = 0; c < gc; c++) cellRects.push({ x: colCuts[c], y: y0, w: colCuts[c + 1] - colCuts[c], h: y1 - y0 });
+  }
   const cells = [];
   for (let i = 0; i < frames; i++) {
-    const cx = (i % gc) * cw;
-    const cy = Math.floor(i / gc) * ch;
-    const { data } = await sharp(input).ensureAlpha().extract({ left: cx, top: cy, width: cw, height: ch }).raw().toBuffer({ resolveWithObject: true });
-    const px = new Uint8ClampedArray(data);
-    removeBg(px, cw, ch);
+    const R = cellRects[i];
+    const cw = R.w;
+    const ch = R.h;
+    const px = new Uint8ClampedArray(cw * ch * 4);
+    for (let y = 0; y < ch; y++) px.set(all.subarray(((R.y + y) * AW + R.x) * 4, ((R.y + y) * AW + R.x + cw) * 4), y * cw * 4);
     dropEdgeFragments(px, cw, ch);
     const b = bbox(px, cw, ch);
     if (!b) throw new Error(`${i + 1}번째 칸에서 그림을 찾지 못했습니다`);
-    cells.push({ px, b, foot: footX(px, cw, b) });
+    cells.push({ px, b, foot: footX(px, cw, b), cw, ch });
   }
   // 모든 프레임을 "발 위치 + 바닥선" 기준으로 정렬한 공통 영역
   const left = Math.max(...cells.map((c) => c.foot - c.b.x0));
@@ -182,7 +234,7 @@ async function importAttackSheet() {
     const c = cells[i];
     const w = c.b.x1 - c.b.x0 + 1;
     const h = c.b.y1 - c.b.y0 + 1;
-    const piece = await sharp(Buffer.from(c.px.buffer), { raw: { width: cw, height: ch, channels: 4 } })
+    const piece = await sharp(Buffer.from(c.px.buffer), { raw: { width: c.cw, height: c.ch, channels: 4 } })
       .extract({ left: c.b.x0, top: c.b.y0, width: w, height: h })
       .resize({ width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(h * k)), kernel: 'lanczos3' })
       .png()

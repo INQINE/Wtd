@@ -30,9 +30,9 @@ const DURATION: Record<Motion, number> = { lunge: 0.38, recoil: 0.25, cast: 0.55
 const CAST_PEAK = 0.2;
 /** 프레임 시트: 대기 → 첫 프레임 전환 시간, 마지막 프레임 → 대기 전환 시간 */
 const SHEET_IN = 0.06;
-const SHEET_OUT = 0.14;
-/** 각 프레임의 끝부분 몇 %를 다음 프레임과 겹칠지 */
-const BLEND = 0.35;
+const SHEET_OUT = 0.1;
+/** 각 프레임의 끝부분 몇 %를 다음 프레임과 겹칠지 (프레임이 많으면 덜 겹쳐도 부드러움) */
+const blendFor = (frames: number) => (frames >= 8 ? 0.2 : 0.35);
 
 function ensureFxTextures(scene: Phaser.Scene): void {
   if (!scene.textures.exists('sd-glow')) {
@@ -227,6 +227,7 @@ export class ImageRig extends Phaser.GameObjects.Container {
       while (i < n - 1 && s >= T[i + 1]) i++;
       a = i;
       const u = (s - T[i]) / (T[i + 1] - T[i]);
+      const BLEND = blendFor(n);
       if (u > 1 - BLEND) {
         b = i + 1 < n ? i + 1 : 'idle';
         mix = (u - (1 - BLEND)) / BLEND;
