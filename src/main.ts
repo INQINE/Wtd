@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BattleScene } from './scenes/battle/BattleScene';
 import { TitleScene } from './scenes/TitleScene';
+import { SDGalleryScene } from './scenes/SDGalleryScene';
 import { COLORS, GAME_H, GAME_W } from './ui/theme';
 
 async function waitFonts(): Promise<void> {
@@ -27,7 +28,7 @@ waitFonts().then(() => {
       height: GAME_H,
     },
     input: { activePointers: 2 },
-    scene: [TitleScene, BattleScene],
+    scene: [TitleScene, BattleScene, SDGalleryScene],
   });
   (window as unknown as { game: Phaser.Game }).game = game;
 });

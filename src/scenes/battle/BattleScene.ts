@@ -12,7 +12,9 @@ import { CARD_H, CARD_W, DeckCard, RARITY_COLOR } from './DeckCard';
 import { HEIGHT, MapRenderer } from './MapRenderer';
 import { Projection } from './projection';
 import { EnemySprite, OperatorSprite } from './sprites';
-import { ensureHudIcons, ensureOpTexture } from './textures';
+import { ensureHudIcons } from './textures';
+import { bakePortrait, PORTRAIT_FOOT, PORTRAIT_SIZE } from '../../sd/SDRig';
+import { sdSpecFor } from '../../data/sdSpecs';
 
 /** 조작 중(드래그·방향 선택·선택) 시간 흐름 비율 */
 const SLOW = 0.2;
@@ -324,10 +326,10 @@ export class BattleScene extends Phaser.Scene {
   private createInfo(): void {
     this.info = this.add.container(0, 0).setDepth(9500).setVisible(false);
     this.infoBg = this.add.graphics();
-    this.infoPortrait = this.add.image(150, 520, '__DEFAULT').setOrigin(0.5, 1).setAlpha(0.95);
+    this.infoPortrait = this.add.image(150, 560, '__DEFAULT').setOrigin(0.5, PORTRAIT_FOOT[1] / PORTRAIT_SIZE).setAlpha(0.97);
     this.infoName = this.add.text(40, 110, '', { ...textStyle(54, '#ffffff', 900), stroke: '#000', strokeThickness: 4 });
     this.infoClass = this.add.text(42, 182, '', textStyle(24, '#dddddd'));
-    this.infoStats = this.add.text(300, 250, '', { ...textStyle(24, '#ffffff', 700), lineSpacing: 14 });
+    this.infoStats = this.add.text(340, 250, '', { ...textStyle(24, '#ffffff', 700), lineSpacing: 14 });
     this.infoTrait = this.add.text(40, 560, '', { ...textStyle(22, '#cfcfcf', 400), wordWrap: { width: 540 }, lineSpacing: 6 });
     this.infoSkill = this.add.text(40, 630, '', { ...textStyle(22, '#ffffff', 400), wordWrap: { width: 540 }, lineSpacing: 6 });
     this.info.add([this.infoBg, this.infoPortrait, this.infoName, this.infoClass, this.infoStats, this.infoTrait, this.infoSkill]);
@@ -556,7 +558,7 @@ export class BattleScene extends Phaser.Scene {
   private select(op: OpUnit): void {
     this.mode = { kind: 'selected', uid: op.uid };
     const d = op.def;
-    this.infoPortrait.setTexture(ensureOpTexture(this, d)).setScale(2.1);
+    this.infoPortrait.setTexture(bakePortrait(this, `sd-${d.id}`, sdSpecFor(d))).setScale(0.72);
     this.infoName.setText(d.name);
     this.infoClass
       .setText(`${CLASS_INFO[d.cls].name}   ${'★'.repeat(d.rarity)}`)
@@ -731,6 +733,7 @@ export class BattleScene extends Phaser.Scene {
     const scale = this.paused || this.ended || this.menuOpen ? 0 : this.speed * (interacting ? SLOW : 1);
     if (scale > 0) this.battle.update((deltaMs / 1000) * scale);
 
+    if (this.mode.kind === 'drag' || this.mode.kind === 'dir') this.mode.ghost.tick(this.time.now);
     this.dimmer.fillAlpha = this.mode.kind === 'dir' ? 0.35 : interacting ? 0.18 : 0;
     this.syncUnits();
     this.drawRoutes();
@@ -760,6 +763,7 @@ export class BattleScene extends Phaser.Scene {
     for (const op of b.ops) {
       alive.add(op.uid);
       const s = this.opSprites.get(op.uid) ?? this.ensureOpSprite(op);
+      s.tick(this.time.now);
       const sk = op.skill;
       s.setStatus(op.hp / op.maxHp, op.sp / sk.spCost, op.skillTime > 0, sk.duration ? op.skillTime / sk.duration : 0, b.skillReady(op), t);
       // 선택된 멤버는 어두운 필터 위로
@@ -863,13 +867,16 @@ export class BattleScene extends Phaser.Scene {
           this.slash(to.x, to.y, color, to.k);
         }
         const victim = ev.side === 'op' ? this.enemySprites.get(ev.tgtUid) : this.opSprites.get(ev.tgtUid);
-        if (victim) {
-          victim.img.setTint(ev.side === 'op' ? 0xffb0b0 : 0xff7070);
+        if (victim instanceof OperatorSprite) victim.rig.flash(0xffb0b0);
+        else if (victim) {
+          victim.img.setTint(0xff7070);
           this.time.delayedCall(70, () => victim.img.clearTint());
         }
-        const attacker = ev.side === 'op' ? this.opSprites.get(ev.srcUid) : this.enemySprites.get(ev.srcUid);
-        if (attacker && !ev.ranged) {
-          this.tweens.add({ targets: attacker.img, x: Math.sign(to.x - from.x) * 8, duration: 70, yoyo: true });
+        if (ev.side === 'op') {
+          this.opSprites.get(ev.srcUid)?.rig.playAttack(this.time.now);
+        } else {
+          const attacker = this.enemySprites.get(ev.srcUid);
+          if (attacker && !ev.ranged) this.tweens.add({ targets: attacker.img, x: Math.sign(to.x - from.x) * 8, duration: 70, yoyo: true });
         }
         break;
       }

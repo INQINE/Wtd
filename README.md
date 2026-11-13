@@ -42,7 +42,9 @@ src/
 tests/        전투 로직 테스트
 ```
 
-## 캐릭터 이미지 넣기 (예정)
-지금은 퍼스널 컬러 원 + 이름 첫 글자로 된 임시 그래픽입니다.
-`src/scenes/battle/textures.ts`의 `ensureOpTexture`가 만드는 텍스처를 SD 이미지로 바꾸면 전투·덱 카드·정보창에 모두 반영됩니다.
+## SD 캐릭터
+캐릭터 사진을 올리면 명일방주식 SD로 변환합니다 → [docs/SD_디자인_가이드.md](docs/SD_디자인_가이드.md)
+사양은 `src/data/sdSpecs.ts`, 그리는 코드는 `src/sd/`, 미리보기는 타이틀의 **SD 도감**.
+
+## 직접 그린 이미지 넣기 (예정)
 git에 올리고 싶지 않은 이미지는 `public/assets/local/` 에 두세요 (.gitignore 처리됨).

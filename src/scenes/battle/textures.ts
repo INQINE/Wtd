@@ -1,22 +1,11 @@
 import Phaser from 'phaser';
-import { CLASS_INFO } from '../../data/operators';
-import type { EnemyDef, OperatorDef } from '../../data/types';
-import { textStyle } from '../../ui/theme';
+import type { EnemyDef } from '../../data/types';
 
 /** 텍스처 해상도: 월드 1칸 = 128px */
 export const TEX_PER_TILE = 128;
-export const OP_TEX_W = 128;
-export const OP_TEX_H = 168;
 export const EN_TEX = 128;
 
 const OUTLINE = 0x15171b;
-
-function darken(color: number, pct: number): number {
-  return Phaser.Display.Color.ValueToColor(color).darken(pct).color;
-}
-function lighten(color: number, pct: number): number {
-  return Phaser.Display.Color.ValueToColor(color).lighten(pct).color;
-}
 
 /** Graphics/Text 여러 개를 한 장의 텍스처로 굽는다 */
 function bake(
@@ -35,83 +24,6 @@ function bake(
   for (const t of texts) dt.draw(t);
   g.destroy();
   texts.forEach((t) => t.destroy());
-}
-
-/**
- * 멤버 임시 SD(치비) 그래픽: 퍼스널 컬러 머리 + 몸 + 가슴에 이름 첫 글자.
- * 오른쪽을 바라보는 기준. 발끝이 텍스처 아래 중앙.
- */
-export function opTextureKey(def: OperatorDef, facing: 'left' | 'right' = 'right'): string {
-  return `op-${def.id}-${facing}`;
-}
-
-/** 좌우 반전 텍스처를 따로 굽는다 (가슴 글자는 뒤집히지 않게) */
-export function ensureOpTexture(scene: Phaser.Scene, def: OperatorDef, facing: 'left' | 'right' = 'right'): string {
-  const key = opTextureKey(def, facing);
-  bake(scene, key, OP_TEX_W, OP_TEX_H, (g) => {
-    const c = def.color;
-    if (facing === 'left') {
-      g.translateCanvas(OP_TEX_W, 0);
-      g.scaleCanvas(-1, 1);
-    }
-    // 발
-    g.fillStyle(OUTLINE, 1);
-    g.fillEllipse(52, 160, 26, 12);
-    g.fillEllipse(78, 160, 26, 12);
-    // 몸
-    g.fillStyle(darken(c, 18), 1);
-    g.fillRoundedRect(36, 88, 56, 70, 18);
-    g.lineStyle(4, OUTLINE, 1);
-    g.strokeRoundedRect(36, 88, 56, 70, 18);
-    g.fillStyle(0xffffff, 0.14);
-    g.fillRoundedRect(42, 94, 22, 56, 10);
-    // 팔
-    g.fillStyle(darken(c, 30), 1);
-    g.fillRoundedRect(84, 100, 16, 34, 8);
-    g.lineStyle(3, OUTLINE, 1);
-    g.strokeRoundedRect(84, 100, 16, 34, 8);
-    // 머리 (머리카락 = 퍼스널 컬러)
-    g.fillStyle(c, 1);
-    g.fillCircle(62, 54, 44);
-    g.lineStyle(4, OUTLINE, 1);
-    g.strokeCircle(62, 54, 44);
-    // 얼굴
-    g.fillStyle(0xffe6d5, 1);
-    g.fillEllipse(72, 64, 58, 50);
-    // 앞머리
-    g.fillStyle(c, 1);
-    g.fillTriangle(40, 28, 104, 34, 70, 56);
-    g.fillTriangle(38, 30, 60, 30, 46, 66);
-    g.fillStyle(lighten(c, 25), 0.6);
-    g.fillEllipse(48, 30, 26, 12);
-    // 눈 (오른쪽을 봄)
-    g.fillStyle(0x2a2230, 1);
-    g.fillEllipse(70, 66, 9, 14);
-    g.fillEllipse(90, 66, 9, 14);
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(72, 62, 2.5);
-    g.fillCircle(92, 62, 2.5);
-    // 볼
-    g.fillStyle(0xff8a8a, 0.45);
-    g.fillEllipse(64, 78, 12, 6);
-    g.fillEllipse(96, 78, 10, 6);
-    // 클래스 표식 (머리핀)
-    g.fillStyle(CLASS_INFO[def.cls].color, 1);
-    g.fillPoints(
-      [new Phaser.Math.Vector2(30, 40), new Phaser.Math.Vector2(40, 30), new Phaser.Math.Vector2(50, 40), new Phaser.Math.Vector2(40, 50)],
-      true,
-    );
-    g.lineStyle(2, 0xffffff, 1);
-    g.strokePoints(
-      [new Phaser.Math.Vector2(30, 40), new Phaser.Math.Vector2(40, 30), new Phaser.Math.Vector2(50, 40), new Phaser.Math.Vector2(40, 50)],
-      true,
-    );
-    const letter = scene.make
-      .text({ x: 64, y: 124, text: def.short, style: { ...textStyle(34, '#ffffff', 900), stroke: '#15171b', strokeThickness: 6 } }, false)
-      .setOrigin(0.5);
-    return [letter];
-  });
-  return key;
 }
 
 /** 적(왁두 계열) 임시 그래픽. 발끝이 텍스처 아래 중앙. */

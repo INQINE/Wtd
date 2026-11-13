@@ -32,6 +32,7 @@ export class TitleScene extends Phaser.Scene {
       stroke: COLORS.accent,
       fontSize: 44,
     });
+    new Button(this, GAME_W - 360, 880, 460, 80, 'SD 도감', () => this.scene.start('sd-gallery'));
     new Button(this, GAME_W - 360, 780, 460, 80, '전체화면', () => {
       if (this.scale.isFullscreen) this.scale.stopFullscreen();
       else this.scale.startFullscreen();

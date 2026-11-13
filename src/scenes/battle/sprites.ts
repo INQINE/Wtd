@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { Dir, EnemyDef, OperatorDef } from '../../data/types';
-import { EN_TEX, ensureEnemyTexture, ensureOpTexture, TEX_PER_TILE } from './textures';
+import { EN_TEX, ensureEnemyTexture } from './textures';
+import { SDRig } from '../../sd/SDRig';
+import { sdSpecFor } from '../../data/sdSpecs';
 
 /** 체력바/스킬바 기준 크기 (k = 1칸 픽셀일 때 k=REF_K 에서 1배) */
 const REF_K = 120;
@@ -13,7 +15,8 @@ const DIR_ANGLE: Record<Dir, number> = { right: 0, down: 90, left: 180, up: 270 
  * 컨테이너 위치 = 발 위치(투영된 바닥 좌표). k = 그 지점의 1칸 픽셀 수.
  */
 export class OperatorSprite extends Phaser.GameObjects.Container {
-  readonly img: Phaser.GameObjects.Image;
+  /** SD 리그 (명일방주식 치비, 부위별 애니메이션) */
+  readonly rig: SDRig;
   private shadow: Phaser.GameObjects.Ellipse;
   private dirMark: Phaser.GameObjects.Triangle;
   private aura: Phaser.GameObjects.Ellipse;
@@ -26,11 +29,10 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
 
   constructor(scene: Phaser.Scene, readonly def: OperatorDef) {
     super(scene, 0, 0);
-    const key = ensureOpTexture(scene, def);
     this.shadow = scene.add.ellipse(0, 0, 100, 100, 0x000000, 0.4);
     this.aura = scene.add.ellipse(0, 0, 100, 100, 0xffd54a, 0).setStrokeStyle(3, 0xffd54a, 0.9).setVisible(false);
     this.dirMark = scene.add.triangle(0, 0, 0, -8, 0, 8, 14, 0, 0xffffff, 0.85);
-    this.img = scene.add.image(0, 0, key).setOrigin(0.5, 0.98);
+    this.rig = new SDRig(scene, `sd-${def.id}`, sdSpecFor(def), false);
 
     // 발밑 체력/SP 바 (명일방주처럼 멤버 아래쪽)
     this.bars = scene.add.container(0, 0);
@@ -49,21 +51,21 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
     g.fillStyle(0x2b2100, 1).fillTriangle(-2, -8, 4, -1, -3, 1).fillTriangle(3, -1, -3, 8, 2, 1);
     this.readyIcon.add(g);
 
-    this.add([this.shadow, this.aura, this.dirMark, this.img, this.bars, this.readyIcon]);
+    this.add([this.shadow, this.aura, this.dirMark, this.rig, this.bars, this.readyIcon]);
     scene.add.existing(this);
   }
 
   /** 투영 배율에 맞춰 크기 조정 */
   setK(k: number, squash: number): void {
     this.k = k;
-    this.img.setScale((k / TEX_PER_TILE) * 0.8);
+    this.rig.setHeightPx(k * 0.98);
     this.shadow.setDisplaySize(k * 0.62, k * 0.62 * squash);
     this.auraW = k * 0.95;
     this.auraH = k * 0.95 * squash;
     this.aura.setDisplaySize(this.auraW, this.auraH);
     const bs = Phaser.Math.Clamp(k / REF_K, 0.75, 1.25);
     this.bars.setScale(bs).setPosition(0, k * 0.16);
-    this.readyIcon.setPosition(0, -k * 1.16);
+    this.readyIcon.setPosition(0, -k * 1.1);
     this.dirMark.setScale(bs);
     this.updateDirMark(squash);
   }
@@ -76,7 +78,7 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
   setDir(dir: Dir): void {
     this.dir = dir;
     if (dir === 'left' || dir === 'right') this.facing = dir;
-    this.img.setTexture(ensureOpTexture(this.scene, this.def, this.facing));
+    this.rig.setFacing(this.facing === 'left');
     this.updateDirMark(this.squash);
   }
 
@@ -86,6 +88,11 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
     const r = this.k * 0.42;
     this.dirMark.setPosition(Math.cos(a) * r, Math.sin(a) * r * squash);
     this.dirMark.setRotation(Math.atan2(Math.sin(a) * squash, Math.cos(a)));
+  }
+
+  /** 매 프레임 애니메이션 갱신 (ms) */
+  tick(now: number): void {
+    this.rig.tick(now);
   }
 
   setStatus(hpRatio: number, spRatio: number, skillActive: boolean, skillRemainRatio: number, ready: boolean, time: number): void {
@@ -98,7 +105,7 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
       this.spFill.fillColor = spRatio >= 1 ? 0xffd54a : 0x9be15d;
     }
     this.readyIcon.setVisible(ready);
-    if (ready) this.readyIcon.y = -this.k * 1.16 - Math.abs(Math.sin(time * 4)) * 6;
+    if (ready) this.readyIcon.y = -this.k * 1.1 - Math.abs(Math.sin(time * 4)) * 6;
     this.aura.setVisible(skillActive);
     if (skillActive) {
       const p = (time * 1.5) % 1;
