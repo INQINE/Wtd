@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import { OPERATORS } from '../data/operators';
-import { sdSpecFor } from '../data/sdSpecs';
-import { SDRig } from '../sd/SDRig';
+import { createSDView, type SDView } from '../sd/factory';
+import { sdImageFor } from '../sd/registry';
 import { Button } from '../ui/button';
 import { COLORS, textStyle } from '../ui/theme';
 
 /** SD 도감: 모든 멤버의 SD를 대기/공격 모션으로 미리보기 */
 export class SDGalleryScene extends Phaser.Scene {
-  private rigs: SDRig[] = [];
+  private rigs: SDView[] = [];
   private autoAttack = true;
 
   constructor() {
@@ -22,7 +22,7 @@ export class SDGalleryScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.fillGradientStyle(0x2a2f38, 0x2a2f38, 0x14161a, 0x14161a, 1).fillRect(0, 0, W, H);
     this.add.text(40, 30, 'SD 도감', textStyle(48, '#ffffff', 900));
-    this.add.text(42, 92, '임시 디자인 · 캐릭터 사진을 올려주면 실제 디자인으로 교체됩니다', textStyle(22, COLORS.textDim, 400));
+    this.add.text(42, 92, '🖼 = 가져온 SD 이미지 · 나머지는 코드로 그린 임시 디자인', textStyle(22, COLORS.textDim, 400));
 
     const ops = data.only ? OPERATORS.filter((o) => o.id === data.only) : OPERATORS;
     const cols = Math.min(5, ops.length);
@@ -34,9 +34,9 @@ export class SDGalleryScene extends Phaser.Scene {
       const cx = 40 + cellW * (i % cols) + cellW / 2;
       const cy = 150 + cellH * Math.floor(i / cols) + cellH * 0.86;
       this.add.ellipse(cx, cy, size * 0.45, size * 0.1, 0x000000, 0.35);
-      const rig = new SDRig(this, `sd-${def.id}`, sdSpecFor(def)).setPosition(cx, cy).setHeightPx(size);
+      const rig = createSDView(this, def).setPosition(cx, cy).setHeightPx(size);
       this.rigs.push(rig);
-      this.add.text(cx, cy + 22, def.name, textStyle(24, '#ffffff', 700)).setOrigin(0.5, 0);
+      this.add.text(cx, cy + 22, def.name + (sdImageFor(this, def.id) ? '  🖼' : ''), textStyle(24, '#ffffff', 700)).setOrigin(0.5, 0);
       const zone = this.add.zone(cx, cy - size / 2, size * 0.6, size).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => rig.playAttack(this.time.now));
     });

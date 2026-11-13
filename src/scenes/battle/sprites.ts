@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import type { Dir, EnemyDef, OperatorDef } from '../../data/types';
 import { EN_TEX, ensureEnemyTexture } from './textures';
-import { SDRig } from '../../sd/SDRig';
-import { sdSpecFor } from '../../data/sdSpecs';
+import { createSDView, type SDView } from '../../sd/factory';
 
 /** 체력바/스킬바 기준 크기 (k = 1칸 픽셀일 때 k=REF_K 에서 1배) */
 const REF_K = 120;
@@ -16,7 +15,7 @@ const DIR_ANGLE: Record<Dir, number> = { right: 0, down: 90, left: 180, up: 270 
  */
 export class OperatorSprite extends Phaser.GameObjects.Container {
   /** SD 리그 (명일방주식 치비, 부위별 애니메이션) */
-  readonly rig: SDRig;
+  readonly rig: SDView;
   private shadow: Phaser.GameObjects.Ellipse;
   private dirMark: Phaser.GameObjects.Triangle;
   private aura: Phaser.GameObjects.Ellipse;
@@ -32,7 +31,7 @@ export class OperatorSprite extends Phaser.GameObjects.Container {
     this.shadow = scene.add.ellipse(0, 0, 100, 100, 0x000000, 0.4);
     this.aura = scene.add.ellipse(0, 0, 100, 100, 0xffd54a, 0).setStrokeStyle(3, 0xffd54a, 0.9).setVisible(false);
     this.dirMark = scene.add.triangle(0, 0, 0, -8, 0, 8, 14, 0, 0xffffff, 0.85);
-    this.rig = new SDRig(scene, `sd-${def.id}`, sdSpecFor(def), false);
+    this.rig = createSDView(scene, def, false);
 
     // 발밑 체력/SP 바 (명일방주처럼 멤버 아래쪽)
     this.bars = scene.add.container(0, 0);

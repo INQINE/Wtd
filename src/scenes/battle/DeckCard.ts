@@ -3,8 +3,7 @@ import type { OperatorDef } from '../../data/types';
 import { CLASS_INFO } from '../../data/operators';
 import type { DeployError } from '../../battle/sim';
 import { textStyle } from '../../ui/theme';
-import { bakePortrait, SD_RES } from '../../sd/SDRig';
-import { sdSpecFor } from '../../data/sdSpecs';
+import { sdPortrait } from '../../sd/factory';
 
 export const CARD_W = 128;
 export const CARD_H = 156;
@@ -50,12 +49,17 @@ export class DeckCard extends Phaser.GameObjects.Container {
     const dark = Phaser.Display.Color.ValueToColor(def.color).darken(35).color;
     art.fillGradientStyle(def.color, def.color, dark, dark, 1);
     art.fillRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6);
-    // SD 전신 초상에서 머리~가슴 부분만 잘라서 사용 (디자인 좌표: 발 (130,250), 머리 중심 ≈ (135,80))
-    const crop = { x: 70 * SD_RES, y: 14 * SD_RES, w: 124 * SD_RES, h: 152 * SD_RES };
-    const face = scene.add.image(0, 0, bakePortrait(scene, `sd-${def.id}`, sdSpecFor(def))).setOrigin(0, 0);
+    // SD 초상에서 얼굴~가슴 부분만 잘라서 사용
+    const pt = sdPortrait(scene, def);
+    const crop = pt.face;
+    const face = scene.add.image(0, 0, pt.key).setOrigin(0, 0);
     face.setScale((w - 6) / crop.w);
     face.setCrop(crop.x, crop.y, crop.w, crop.h);
     face.setPosition(-w / 2 + 3 - crop.x * face.scaleX, -h / 2 + 3 - crop.y * face.scaleY);
+    if (pt.flip) {
+      face.setFlipX(true);
+      face.setPosition(-w / 2 + 3 - (pt.width - crop.x - crop.w) * face.scaleX, face.y);
+    }
     const fade = scene.add.graphics();
     fade.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.85, 0.85);
     fade.fillRect(-w / 2 + 3, h / 2 - 64, w - 6, 61);

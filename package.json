@@ -8,12 +8,14 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sd:import": "node scripts/sd-import.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "sharp": "^0.33.5",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.4"

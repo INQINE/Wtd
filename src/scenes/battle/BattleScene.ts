@@ -13,8 +13,7 @@ import { HEIGHT, MapRenderer } from './MapRenderer';
 import { Projection } from './projection';
 import { EnemySprite, OperatorSprite } from './sprites';
 import { ensureHudIcons } from './textures';
-import { bakePortrait, PORTRAIT_FOOT, PORTRAIT_SIZE } from '../../sd/SDRig';
-import { sdSpecFor } from '../../data/sdSpecs';
+import { sdPortrait } from '../../sd/factory';
 
 /** 조작 중(드래그·방향 선택·선택) 시간 흐름 비율 */
 const SLOW = 0.2;
@@ -326,7 +325,7 @@ export class BattleScene extends Phaser.Scene {
   private createInfo(): void {
     this.info = this.add.container(0, 0).setDepth(9500).setVisible(false);
     this.infoBg = this.add.graphics();
-    this.infoPortrait = this.add.image(150, 560, '__DEFAULT').setOrigin(0.5, PORTRAIT_FOOT[1] / PORTRAIT_SIZE).setAlpha(0.97);
+    this.infoPortrait = this.add.image(150, 560, '__DEFAULT').setAlpha(0.97);
     this.infoName = this.add.text(40, 110, '', { ...textStyle(54, '#ffffff', 900), stroke: '#000', strokeThickness: 4 });
     this.infoClass = this.add.text(42, 182, '', textStyle(24, '#dddddd'));
     this.infoStats = this.add.text(340, 250, '', { ...textStyle(24, '#ffffff', 700), lineSpacing: 14 });
@@ -558,7 +557,10 @@ export class BattleScene extends Phaser.Scene {
   private select(op: OpUnit): void {
     this.mode = { kind: 'selected', uid: op.uid };
     const d = op.def;
-    this.infoPortrait.setTexture(bakePortrait(this, `sd-${d.id}`, sdSpecFor(d))).setScale(0.72);
+    const pt = sdPortrait(this, d);
+    // 발을 기준점으로, 높이 약 380px에 맞춤
+    this.infoPortrait.setTexture(pt.key).setOrigin(pt.footX / pt.width, pt.footY / pt.height).setFlipX(pt.flip);
+    this.infoPortrait.setScale(Math.min(380 / pt.height, 300 / pt.width) * (pt.height === pt.width ? 1.2 : 1));
     this.infoName.setText(d.name);
     this.infoClass
       .setText(`${CLASS_INFO[d.cls].name}   ${'★'.repeat(d.rarity)}`)

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BattleScene } from './scenes/battle/BattleScene';
+import { BootScene } from './scenes/BootScene';
 import { TitleScene } from './scenes/TitleScene';
 import { SDGalleryScene } from './scenes/SDGalleryScene';
 import { COLORS, GAME_H, GAME_W } from './ui/theme';
@@ -28,7 +29,7 @@ waitFonts().then(() => {
       height: GAME_H,
     },
     input: { activePointers: 2 },
-    scene: [TitleScene, BattleScene, SDGalleryScene],
+    scene: [BootScene, TitleScene, BattleScene, SDGalleryScene],
   });
   (window as unknown as { game: Phaser.Game }).game = game;
 });

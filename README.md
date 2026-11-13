@@ -43,7 +43,9 @@ tests/        전투 로직 테스트
 ```
 
 ## SD 캐릭터
-캐릭터 사진을 올리면 명일방주식 SD로 변환합니다 → [docs/SD_디자인_가이드.md](docs/SD_디자인_가이드.md)
+- 그림체 SD 이미지 만들기 (이미지 생성 앱 + 프롬프트): [docs/SD_이미지_생성_가이드.md](docs/SD_이미지_생성_가이드.md)
+- 가져오기: `npm run sd:import -- <이미지> <멤버id>` → `public/assets/sd/`
+- 이미지가 없는 멤버는 코드로 그린 임시 SD 사용: [docs/SD_디자인_가이드.md](docs/SD_디자인_가이드.md)
 사양은 `src/data/sdSpecs.ts`, 그리는 코드는 `src/sd/`, 미리보기는 타이틀의 **SD 도감**.
 
 ## 직접 그린 이미지 넣기 (예정)
