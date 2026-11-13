@@ -1,1 +1,14 @@
-{}
+{
+  "ine": {
+    "file": "ine.png",
+    "anchorX": 0.45,
+    "facing": "right",
+    "scale": 1,
+    "face": [
+      0.15,
+      0.04,
+      0.55,
+      0.5
+    ]
+  }
+}
