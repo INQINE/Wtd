@@ -59,6 +59,7 @@ export class BattleScene extends Phaser.Scene {
   private enemySprites = new Map<number, EnemySprite>();
   private cards: DeckCard[] = [];
   private routePreviews: RoutePreview[] = [];
+  private healAnimFrame = -1;
 
   // 표시 레이어
   private mapImage!: Phaser.GameObjects.Image;
@@ -884,12 +885,38 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'heal': {
         const to = this.unitPoint('op', ev.tgtUid, ev.to, 0.4);
-        const glow = this.add.image(to.x, to.y, 'glow').setTint(0x5cff9d).setDepth(5000).setScale(0.2).setAlpha(0.9);
-        this.tweens.add({ targets: glow, scale: 0.6, alpha: 0, duration: 450, onComplete: () => glow.destroy() });
-        for (let i = 0; i < 3; i++) {
-          const plus = this.add.text(to.x + Phaser.Math.Between(-20, 20), to.y, '+', textStyle(28, '#7dffa0', 900)).setOrigin(0.5).setDepth(5001);
-          this.tweens.add({ targets: plus, y: to.y - 50, alpha: 0, duration: 600, delay: i * 80, onComplete: () => plus.destroy() });
+        const healer = ev.srcUid !== ev.tgtUid ? this.opSprites.get(ev.srcUid) : undefined;
+        if (healer && this.healAnimFrame !== this.game.loop.frame) {
+          // 같은 프레임에 여러 명을 회복해도 시전 모션은 한 번만
+          this.healAnimFrame = this.game.loop.frame;
+          healer.rig.playAttack(this.time.now);
         }
+        if (healer) {
+          // 시전 순간 무기 끝(없으면 가슴)에서 대상에게 빛이 날아감
+          this.time.delayedCall(200, () => {
+            const tip = 'tipWorld' in healer.rig ? healer.rig.tipWorld() : null;
+            const from = tip ?? this.unitPoint('op', ev.srcUid, ev.from, 0.6);
+            const orb = this.add.image(from.x, from.y, 'glow').setTint(0xb58cff).setDepth(5000).setScale(0.22).setBlendMode(Phaser.BlendModes.ADD);
+            this.tweens.add({
+              targets: orb,
+              x: to.x,
+              y: to.y,
+              duration: 260,
+              ease: 'Sine.in',
+              onComplete: () => orb.destroy(),
+            });
+          });
+        }
+        const landing = () => {
+          const glow = this.add.image(to.x, to.y, 'glow').setTint(0x5cff9d).setDepth(5000).setScale(0.2).setAlpha(0.9);
+          this.tweens.add({ targets: glow, scale: 0.6, alpha: 0, duration: 450, onComplete: () => glow.destroy() });
+          for (let i = 0; i < 3; i++) {
+            const plus = this.add.text(to.x + Phaser.Math.Between(-20, 20), to.y, '+', textStyle(28, '#7dffa0', 900)).setOrigin(0.5).setDepth(5001);
+            this.tweens.add({ targets: plus, y: to.y - 50, alpha: 0, duration: 600, delay: i * 80, onComplete: () => plus.destroy() });
+          }
+        };
+        if (healer) this.time.delayedCall(460, landing);
+        else landing();
         break;
       }
       case 'skill': {

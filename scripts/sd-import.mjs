@@ -9,6 +9,11 @@
  *     --crop x,y,w,h        시트에서 일부만 잘라 쓰기
  *     --keep-bg             배경 제거 안 함
  *
+ *   공격 동작 시트 (여러 프레임이 한 장에 있는 그림):
+ *     --attack --frames 4 --grid 2x2 [--fps 10]
+ *       칸을 왼쪽→오른쪽, 위→아래 순서로 잘라서 프레임으로 쓴다.
+ *       모든 프레임을 같은 기준(발 위치)으로 맞춰 public/assets/sd/<id>-attack.png 로 저장.
+ *
  * 결과: public/assets/sd/<id>.png, public/assets/sd/manifest.json
  */
 import fs from 'node:fs';
@@ -33,6 +38,135 @@ const keepBg = args.includes('--keep-bg');
 
 const OUT_DIR = path.resolve('public/assets/sd');
 const MAX_H = 720;
+
+const attackMode = args.includes('--attack');
+if (attackMode) {
+  await importAttackSheet();
+  process.exit(0);
+}
+
+/** RGBA 버퍼에서 테두리부터 배경을 지운다 */
+function removeBg(px, W, H) {
+  const at = (x, y) => (y * W + x) * 4;
+  const cornerAlpha = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)].map((k) => px[k + 3]);
+  if (cornerAlpha.every((a) => a < 16)) return;
+  const samples = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)];
+  const bg = [0, 1, 2].map((c) => samples.reduce((s, k) => s + px[k + c], 0) / samples.length);
+  const near = (k) => Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]) <= tol;
+  const seen = new Uint8Array(W * H);
+  const stack = [];
+  for (let x = 0; x < W; x++) stack.push(x, 0, x, H - 1);
+  for (let y = 0; y < H; y++) stack.push(0, y, W - 1, y);
+  while (stack.length) {
+    const y = stack.pop();
+    const x = stack.pop();
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const i = y * W + x;
+    if (seen[i]) continue;
+    seen[i] = 1;
+    const k = i * 4;
+    if (px[k + 3] < 16 || near(k)) {
+      px[k + 3] = 0;
+      stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+    }
+  }
+  for (let y = 1; y < H - 1; y++)
+    for (let x = 1; x < W - 1; x++) {
+      const k = at(x, y);
+      if (px[k + 3] === 0) continue;
+      if (![at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)].some((n) => px[n + 3] === 0)) continue;
+      const d = Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]);
+      if (d < tol * 2.5) px[k + 3] = Math.round(255 * Math.min(1, d / (tol * 2.5)));
+    }
+}
+
+function bbox(px, W, H) {
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (px[(y * W + x) * 4 + 3] > 24) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+
+/** 발 위치: 맨 아래 5% 줄의 가로 중심 (프레임 좌표) */
+function footX(px, W, b) {
+  const h = b.y1 - b.y0 + 1;
+  let sx = 0, n = 0;
+  for (let y = Math.floor(b.y1 - h * 0.05); y <= b.y1; y++)
+    for (let x = b.x0; x <= b.x1; x++)
+      if (px[(y * W + x) * 4 + 3] > 64) {
+        sx += x;
+        n++;
+      }
+  return n ? sx / n : (b.x0 + b.x1) / 2;
+}
+
+async function importAttackSheet() {
+  const frames = Number(opt('frames', '4'));
+  const [gc, gr] = (opt('grid', `${frames}x1`)).split('x').map(Number);
+  const fps = Number(opt('fps', '10'));
+  const meta = await sharp(input).metadata();
+  const cw = Math.floor(meta.width / gc);
+  const ch = Math.floor(meta.height / gr);
+  const cells = [];
+  for (let i = 0; i < frames; i++) {
+    const cx = (i % gc) * cw;
+    const cy = Math.floor(i / gc) * ch;
+    const { data } = await sharp(input).ensureAlpha().extract({ left: cx, top: cy, width: cw, height: ch }).raw().toBuffer({ resolveWithObject: true });
+    const px = new Uint8ClampedArray(data);
+    removeBg(px, cw, ch);
+    const b = bbox(px, cw, ch);
+    if (!b) throw new Error(`${i + 1}번째 칸에서 그림을 찾지 못했습니다`);
+    cells.push({ px, b, foot: footX(px, cw, b) });
+  }
+  // 모든 프레임을 "발 위치 + 바닥선" 기준으로 정렬한 공통 영역
+  const left = Math.max(...cells.map((c) => c.foot - c.b.x0));
+  const right = Math.max(...cells.map((c) => c.b.x1 - c.foot));
+  const up = Math.max(...cells.map((c) => c.b.y1 - c.b.y0));
+  const fw = Math.ceil(left + right + 2);
+  const fh = Math.ceil(up + 2);
+  const OUT_H = Math.min(MAX_H, Math.max(fh, 480));
+  const k = OUT_H / fh;
+  const outW = Math.round(fw * k);
+  const composites = [];
+  for (let i = 0; i < frames; i++) {
+    const c = cells[i];
+    const w = c.b.x1 - c.b.x0 + 1;
+    const h = c.b.y1 - c.b.y0 + 1;
+    const piece = await sharp(Buffer.from(c.px.buffer), { raw: { width: cw, height: ch, channels: 4 } })
+      .extract({ left: c.b.x0, top: c.b.y0, width: w, height: h })
+      .resize({ width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(h * k)), kernel: 'lanczos3' })
+      .png()
+      .toBuffer();
+    composites.push({ input: piece, left: i * outW + Math.round((left - (c.foot - c.b.x0)) * k), top: OUT_H - Math.round(h * k) });
+  }
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  const file = `${id}-attack.png`;
+  await sharp({ create: { width: outW * frames, height: OUT_H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(composites)
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(OUT_DIR, file));
+  const manifestPath = path.join(OUT_DIR, 'manifest.json');
+  const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : {};
+  if (!manifest[id]) throw new Error(`먼저 대기 그림을 가져와야 합니다: npm run sd:import -- <그림> ${id}`);
+  const body0 = cells[0].b.y1 - cells[0].b.y0 + 1;
+  manifest[id].attack = {
+    file,
+    frames,
+    fps,
+    frameWidth: outW,
+    frameHeight: OUT_H,
+    anchorX: Number((left / fw).toFixed(3)),
+    bodyRatio: Number((body0 / fh).toFixed(3)),
+  };
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+  console.log(`✔ ${id} 공격 동작: ${frames}프레임 (${gc}×${gr}), 프레임 ${outW}×${OUT_H}, ${fps}fps → ${file}`);
+}
 
 let img = sharp(input).ensureAlpha();
 if (crop) {
