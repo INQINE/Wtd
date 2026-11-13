@@ -79,7 +79,8 @@ Character:
 
 Output:
 - exactly one character, centered, entire body visible including feet, with margin around it
-- transparent background, no ground shadow, no text, no border, no other characters`;
+- no ground shadow, no text, no border, no other characters
+- transparent background; the background must also fill every gap inside the silhouette (between arms, hair, weapon)`;
 
 const readImage = (p) => {
   const buf = fs.readFileSync(p);
@@ -132,7 +133,7 @@ if (provider === 'gemini') {
     model = names[0];
     console.log('사용 가능한 이미지 모델:', names.join(', '));
   }
-  const geminiPrompt = prompt.replace('transparent background', 'plain pure white background');
+  const geminiPrompt = prompt.replace('transparent background;', 'flat solid #00FF00 green background (use #FF00FF magenta if the character has green), no gradient;');
   console.log(`생성 중... (Gemini ${model}, ${n}장)`);
   for (let i = 0; i < n; i++) {
     const body = {
@@ -182,7 +183,7 @@ if (provider === 'gemini') {
   if (!res.ok && /background|transparen/i.test(json.error?.message ?? '')) {
     console.log('투명 배경 미지원 → 흰 배경으로 재시도');
     form.delete('background');
-    form.set('prompt', prompt.replace('transparent background', 'plain pure white background'));
+    form.set('prompt', prompt.replace('transparent background;', 'flat solid #00FF00 green background (use #FF00FF magenta if the character has green), no gradient;'));
     res = await call(form);
     json = await res.json();
   }

@@ -8,7 +8,7 @@
 
 ## SD 캐릭터 표준 방식 (사용자 확정)
 1. 사용자가 멤버 사진을 올림 → `docs/SD_프롬프트/<이름>.md`에 전용 프롬프트 작성 (그림체 레퍼런스: `.sd-ref/style-sheet.png`)
-2. 사용자가 무료 앱(Gemini/ChatGPT)으로 **대기 SD 그림 1장**을 생성해 올림
+2. 사용자가 무료 앱(Gemini/ChatGPT)으로 **대기 SD 그림 1장**을 생성해 올림 — 배경은 투명 PNG 또는 초록(#00FF00)/마젠타 단색 (흰 배경 금지)
 3. `npm run sd:import -- <그림> <멤버id>` → manifest에 `anchorX`(발), `face`(카드 얼굴), `tip`(무기 끝), `fxColor` 지정
 4. 공격 모션은 **코드로 붙이는 방식**이 표준 (프레임 시트 사용 안 함): `src/sd/ImageRig.ts`
 5. SD 도감 / 전투에서 확인 → build:web → 링크 재게시 → 커밋·푸시

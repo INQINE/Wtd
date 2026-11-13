@@ -8,6 +8,8 @@
  *     --tolerance 32        배경색 판정 허용치 (0~255)
  *     --crop x,y,w,h        시트에서 일부만 잘라 쓰기
  *     --keep-bg             배경 제거 안 함
+ *     --hole-region x0,y0,x1,y1   흰 배경일 때 이 영역(0~1 비율) 안에 갇힌 흰 구멍도 지움 (여러 개는 ; 로 구분)
+ *                           ※ 초록/마젠타 같은 단색 배경이면 구멍을 자동으로 전부 지움
  *
  *   공격 동작 시트 (여러 프레임이 한 장에 있는 그림):
  *     --attack --frames 4 --grid 2x2 [--durations 0.09,0.16,0.2,0.24]
@@ -35,6 +37,11 @@ const scale = Number(opt('scale', '1'));
 const tol = Number(opt('tolerance', '32'));
 const crop = opt('crop', null);
 const keepBg = args.includes('--keep-bg');
+/** 흰 배경일 때 안쪽 구멍을 지울 영역들 (입력 그림 기준 0~1 비율) "x0,y0,x1,y1;..." */
+const holeBoxes = (opt('hole-region', '') || '')
+  .split(';')
+  .filter(Boolean)
+  .map((b) => b.split(',').map(Number));
 
 const OUT_DIR = path.resolve('public/assets/sd');
 const MAX_H = 720;
@@ -52,7 +59,11 @@ function removeBg(px, W, H) {
   if (cornerAlpha.every((a) => a < 16)) return;
   const samples = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)];
   const bg = [0, 1, 2].map((c) => samples.reduce((s, k) => s + px[k + c], 0) / samples.length);
-  const near = (k) => Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]) <= tol;
+  // 크로마 배경(초록/마젠타 등 채도 높은 단색)이면 더 넓게 지워도 안전
+  const chroma = Math.max(...bg) - Math.min(...bg) > 100;
+  const T = chroma ? Math.max(tol, 60) : tol;
+  const dist = (k) => Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]);
+  const near = (k) => dist(k) <= T;
   const seen = new Uint8Array(W * H);
   const stack = [];
   for (let x = 0; x < W; x++) stack.push(x, 0, x, H - 1);
@@ -70,8 +81,10 @@ function removeBg(px, W, H) {
       stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
     }
   }
-  // 가장자리 정리: 투명 영역에 닿은 밝은(배경색에 가까운) 픽셀을 2겹까지 반투명/투명 처리 → 흰 테두리 제거
-  const edgeTol = Math.max(tol * 2.5, 70);
+  // 캐릭터 안쪽에 갇힌 배경 (팔과 몸 사이, 장식 고리 안쪽 등)
+  removeEnclosed(px, W, H, bg, chroma, T);
+  // 가장자리 정리: 투명 영역에 닿은 배경색에 가까운 픽셀을 2겹까지 반투명/투명 처리 → 흰 테두리 제거
+  const edgeTol = chroma ? 160 : Math.max(tol * 2.5, 70);
   for (let pass = 0; pass < 2; pass++) {
     const fade = [];
     for (let y = 1; y < H - 1; y++)
@@ -83,6 +96,78 @@ function removeBg(px, W, H) {
         if (d < edgeTol) fade.push([k, Math.round(px[k + 3] * Math.pow(d / edgeTol, 1.5))]);
       }
     for (const [k, a] of fade) px[k + 3] = a;
+  }
+  if (chroma) despill(px, W, H, bg);
+}
+
+/** 배경색과 같은 색으로 막힌 구멍을 찾아 지운다 */
+function removeEnclosed(px, W, H, bg, chroma, T) {
+  const minArea = chroma ? 4 : Math.max(60, Math.round(W * H * 0.00012));
+  const isBgLike = (k) => {
+    if (px[k + 3] === 0) return false;
+    if (chroma) return Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]) <= T;
+    // 흰 배경: 거의 순백 + 무채색인 픽셀만 (흰 옷의 음영/질감은 남김)
+    const mn = Math.min(px[k], px[k + 1], px[k + 2]);
+    const mx = Math.max(px[k], px[k + 1], px[k + 2]);
+    return mn >= 246 && mx - mn <= 6;
+  };
+  const seen = new Uint8Array(W * H);
+  let removed = 0;
+  for (let start = 0; start < W * H; start++) {
+    if (seen[start] || !isBgLike(start * 4)) continue;
+    const region = [];
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop();
+      region.push(i);
+      const x = i % W;
+      const y = (i - x) / W;
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (!seen[j] && isBgLike(j * 4)) {
+          seen[j] = 1;
+          stack.push(j);
+        }
+      }
+    }
+    if (region.length < minArea) continue;
+    if (!chroma) {
+      // 흰 배경: 흰 하이라이트·흰 옷과 구분할 수 없으므로 --hole-region 으로 지정한 영역 안의 구멍만 지운다
+      const x = region[0] % W;
+      const y = Math.floor(region[0] / W);
+      if (process.env.SD_DEBUG) console.log('  hole', region.length, (x / W).toFixed(3), (y / H).toFixed(3));
+      const inBox = holeBoxes.some(([x0, y0, x1, y1]) => x >= x0 * W && x <= x1 * W && y >= y0 * H && y <= y1 * H);
+      if (!inBox) continue;
+    }
+    for (const i of region) px[i * 4 + 3] = 0;
+    removed += region.length;
+  }
+  if (removed) console.log(`  안쪽에 갇힌 배경 ${removed}px 제거`);
+}
+
+/** 크로마 배경색이 가장자리에 번진 것(초록 테두리 등)을 지운다 */
+function despill(px, W, H, bg) {
+  const ch = bg.indexOf(Math.max(...bg)); // 배경의 주 채널 (초록 = 1)
+  const others = [0, 1, 2].filter((c) => c !== ch);
+  const near = new Uint8Array(W * H);
+  // 투명 영역에서 4px 안쪽까지만
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      if (px[(y * W + x) * 4 + 3] !== 0) continue;
+      for (let dy = -4; dy <= 4; dy++)
+        for (let dx = -4; dx <= 4; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < W && ny < H) near[ny * W + nx] = 1;
+        }
+    }
+  for (let i = 0; i < W * H; i++) {
+    const k = i * 4;
+    if (!near[i] || px[k + 3] === 0) continue;
+    const cap = Math.max(px[k + others[0]], px[k + others[1]]);
+    if (px[k + ch] > cap) px[k + ch] = cap;
   }
 }
 
@@ -275,42 +360,8 @@ const { width: W, height: H } = info;
 const px = new Uint8ClampedArray(data);
 const at = (x, y) => (y * W + x) * 4;
 
-// ── 1. 배경 제거: 테두리에서부터 배경색과 비슷한 픽셀을 지움 (flood fill)
-const cornerAlpha = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)].map((k) => px[k + 3]);
-const alreadyTransparent = cornerAlpha.every((a) => a < 16);
-if (!keepBg && !alreadyTransparent) {
-  const samples = [at(0, 0), at(W - 1, 0), at(0, H - 1), at(W - 1, H - 1)];
-  const bg = [0, 1, 2].map((c) => samples.reduce((s, k) => s + px[k + c], 0) / samples.length);
-  const near = (k) => Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]) <= tol;
-  const seen = new Uint8Array(W * H);
-  const stack = [];
-  for (let x = 0; x < W; x++) stack.push(x, 0, x, H - 1);
-  for (let y = 0; y < H; y++) stack.push(0, y, W - 1, y);
-  while (stack.length) {
-    const y = stack.pop();
-    const x = stack.pop();
-    if (x < 0 || y < 0 || x >= W || y >= H) continue;
-    const i = y * W + x;
-    if (seen[i]) continue;
-    seen[i] = 1;
-    const k = i * 4;
-    if (px[k + 3] < 16 || near(k)) {
-      px[k + 3] = 0;
-      stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
-    }
-  }
-  // 경계 부드럽게: 지워진 영역에 닿은 밝은 픽셀은 반투명 처리
-  for (let y = 1; y < H - 1; y++) {
-    for (let x = 1; x < W - 1; x++) {
-      const k = at(x, y);
-      if (px[k + 3] === 0) continue;
-      const touching = [at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)].some((n) => px[n + 3] === 0);
-      if (!touching) continue;
-      const d = Math.hypot(px[k] - bg[0], px[k + 1] - bg[1], px[k + 2] - bg[2]);
-      if (d < tol * 2.5) px[k + 3] = Math.round(255 * Math.min(1, d / (tol * 2.5)));
-    }
-  }
-}
+// ── 1. 배경 제거 (테두리 flood fill + 갇힌 배경 구멍 + 가장자리 정리 + 색 번짐 제거)
+if (!keepBg) removeBg(px, W, H);
 
 // ── 2. 여백 자르기
 let x0 = W, y0 = H, x1 = -1, y1 = -1;

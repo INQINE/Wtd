@@ -79,8 +79,15 @@ Character
 - holding an oversized, highly detailed mechanical {무기} (class: {클래스})
 
 Output
-- one character only, centered, entire body visible including feet
-- plain pure white background, no ground shadow, no text, no border
+- one character only, centered, entire body visible including feet, margin around it
+
+Background (important — the image will be cut out automatically):
+- PREFERRED: export as a PNG with a REAL transparent background (alpha channel). Do NOT draw a gray/white checkerboard pattern.
+- If a real transparent background is not possible: fill the ENTIRE background with one flat solid color #00FF00 (pure green),
+  no gradient, no shadow, no glow on the background. If the character has green in it, use #FF00FF (pure magenta) instead.
+- The background color must also fill every gap inside the silhouette (between arms and body, between hair strands,
+  inside rings or holes of the weapon). Never leave white fill in those gaps.
+- no ground shadow, no text, no border, no frame
 ```
 
 `{무기}`와 `{클래스}`는 아래 표에서 골라 바꾸면 된다.
@@ -96,7 +103,14 @@ Output
 | 서포터 | supporter | spell book / drone |
 | 스페셜리스트 | specialist | hook chain / dual daggers |
 
+### 배경(누끼) 규칙
+- **ChatGPT**: 투명 배경 PNG를 만들 수 있어서 가장 좋다. 결과에 회색·흰색 체크무늬가 *그려져* 있으면 진짜 투명이 아니니 아래 수정 문구로 다시 요청.
+- **Gemini**: 투명 배경을 못 만들기 때문에 **초록(#00FF00) 단색 배경**으로 받는다 (초록이 들어간 캐릭터는 마젠타 #FF00FF).
+- 흰 배경은 흰 머리·흰 옷과 구분이 안 돼서 누끼가 지저분해지니 쓰지 않는다.
+
 ### 수정할 때 쓰는 말 (생성 결과를 보고)
+- 체크무늬가 그려졌을 때: `That checkerboard is drawn, not transparent. Redo it on a flat solid #00FF00 green background instead.`
+- 틈이 하얗게 남았을 때: `Fill the gaps between the arms, hair and weapon with the same green background color too.`
 - 그림체가 다를 때: `Match the reference line thickness and shading more closely.`
 - 너무 작게/잘릴 때: `Show the full body including feet, centered, with margin.`
 - 방향이 반대일 때: `Face to the right in 3/4 view.`
@@ -119,6 +133,7 @@ Output
 | `--scale 1.2` | 무기가 너무 커서 캐릭터가 작아 보일 때 |
 | `--crop x,y,w,h` | 여러 캐릭터가 있는 시트에서 하나만 잘라 쓸 때 |
 | `--tolerance 20` | 배경 지우기가 캐릭터 일부까지 지울 때 (값을 낮춤) |
+| `--hole-region x0,y0,x1,y1` | 흰 배경 그림에서 캐릭터 안쪽에 갇힌 흰 틈을 지울 영역 (0~1 비율, 여러 개는 `;`). 초록/마젠타 배경이면 필요 없음 (자동) |
 
 `manifest.json`에서 `face: [x, y, w, h]` (0~1 비율)를 직접 넣으면 덱 카드에 보이는 얼굴 부분을 조정할 수 있다.
 
