@@ -35,10 +35,17 @@
 | **NovelAI / niji journey** | 애니메이션 그림체 특화, 퀄리티 높음 | 유료, 사진 기반 변환은 덜 직관적 | 그림체 퀄리티가 최우선일 때 |
 | **Stable Diffusion (ComfyUI)** 로컬 | 치비 스타일 모델 + 레퍼런스 고정(IP-Adapter)으로 **모든 멤버 그림체 통일**이 가장 잘 됨, 무제한 | NVIDIA 그래픽카드 PC가 필요하고 설정이 어려움 | 멤버가 많아져서 통일감이 중요할 때 |
 
-### 자동화 옵션 (내가 직접 생성)
-OpenAI나 Google Gemini의 **API 키**를 주면, 이 작업 환경에서 내가 직접 이미지를 생성해서 바로 게임에 넣을 수 있다.
-- 키는 채팅에 붙여넣지 말고, 내가 띄우는 **보안 입력 창**으로 넣으면 된다.
-- 이미지 1장마다 API 사용료가 든다.
+### 자동화 (설정 완료: OpenAI API)
+OpenAI API 키가 이 저장소 전용 클라우드 환경(`Wtd`)에 저장되어 있어서, Claude가 직접 생성해 게임에 넣는다.
+- 키는 환경의 보안 저장소에만 있고 저장소/코드에는 없다. 요청할 때 네트워크 프록시가 넣어준다.
+- 이미지 1장마다 API 사용료가 든다 (OpenAI 결제 페이지에서 크레딧 충전 필요).
+
+```bash
+npm run sd:generate -- <멤버id> --photo 사진1.png,사진2.jpg --class caster --weapon "microphone staff" --n 2
+npm run sd:generate -- <멤버id> --desc "보라색 긴 머리, ..." --class medic   # 사진 없이 설명만으로
+```
+- 레퍼런스 그림체 시트는 `.sd-ref/style-sheet.png`, 생성 원본은 `.sd-ref/`·`.sd-raw/`에 저장된다 (둘 다 git 제외).
+- `--n 2`로 후보를 여러 장 만들면 첫 장이 자동으로 들어가고, 다른 후보는 `npm run sd:import -- .sd-raw/<파일> <멤버id>`로 바꿀 수 있다.
 
 ---
 

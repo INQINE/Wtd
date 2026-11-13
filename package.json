@@ -9,7 +9,8 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sd:import": "node scripts/sd-import.mjs"
+    "sd:import": "node scripts/sd-import.mjs",
+    "sd:generate": "NODE_USE_ENV_PROXY=1 node --no-warnings scripts/sd-generate.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
