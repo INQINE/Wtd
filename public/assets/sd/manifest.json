@@ -18,11 +18,17 @@
     "attack": {
       "file": "ine-attack.png",
       "frames": 4,
-      "fps": 8,
-      "frameWidth": 633,
+      "fps": 10,
+      "frameWidth": 631,
       "frameHeight": 592,
-      "anchorX": 0.465,
-      "bodyRatio": 0.87
+      "anchorX": 0.464,
+      "bodyRatio": 0.87,
+      "durations": [
+        0.09,
+        0.16,
+        0.2,
+        0.24
+      ]
     }
   }
 }

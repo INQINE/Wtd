@@ -27,6 +27,8 @@ export interface SDImageEntry {
     anchorX: number;
     /** 첫 프레임에서 몸이 차지하는 세로 비율 (대기 그림과 크기 맞추기용) */
     bodyRatio: number;
+    /** 프레임별 표시 시간(초). 없으면 1/fps */
+    durations?: number[];
   };
 }
 

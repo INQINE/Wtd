@@ -10,7 +10,7 @@
  *     --keep-bg             배경 제거 안 함
  *
  *   공격 동작 시트 (여러 프레임이 한 장에 있는 그림):
- *     --attack --frames 4 --grid 2x2 [--fps 10]
+ *     --attack --frames 4 --grid 2x2 [--durations 0.09,0.16,0.2,0.24]
  *       칸을 왼쪽→오른쪽, 위→아래 순서로 잘라서 프레임으로 쓴다.
  *       모든 프레임을 같은 기준(발 위치)으로 맞춰 public/assets/sd/<id>-attack.png 로 저장.
  *
@@ -80,6 +80,48 @@ function removeBg(px, W, H) {
     }
 }
 
+/**
+ * 옆 칸에서 넘어온 조각 제거: 가장 큰 덩어리(캐릭터)는 남기고,
+ * 칸 가장자리에 닿아 있는 다른 덩어리는 지운다 (칸 안에 떠 있는 반짝이는 유지).
+ */
+function dropEdgeFragments(px, W, H) {
+  const label = new Int32Array(W * H).fill(-1);
+  const comps = [];
+  for (let start = 0; start < W * H; start++) {
+    if (label[start] !== -1 || px[start * 4 + 3] <= 24) continue;
+    const id = comps.length;
+    const c = { size: 0, edge: false, pixels: [] };
+    const stack = [start];
+    label[start] = id;
+    while (stack.length) {
+      const i = stack.pop();
+      c.size++;
+      c.pixels.push(i);
+      const x = i % W;
+      const y = (i - x) / W;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) c.edge = true;
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (label[j] === -1 && px[j * 4 + 3] > 24) {
+          label[j] = id;
+          stack.push(j);
+        }
+      }
+    }
+    comps.push(c);
+  }
+  if (!comps.length) return;
+  const main = comps.reduce((a, b) => (b.size > a.size ? b : a));
+  let removed = 0;
+  for (const c of comps) {
+    if (c === main || !c.edge) continue;
+    for (const i of c.pixels) px[i * 4 + 3] = 0;
+    removed += c.size;
+  }
+  if (removed) console.log(`  가장자리 조각 ${removed}px 제거`);
+}
+
 function bbox(px, W, H) {
   let x0 = W, y0 = H, x1 = -1, y1 = -1;
   for (let y = 0; y < H; y++)
@@ -110,6 +152,7 @@ async function importAttackSheet() {
   const frames = Number(opt('frames', '4'));
   const [gc, gr] = (opt('grid', `${frames}x1`)).split('x').map(Number);
   const fps = Number(opt('fps', '10'));
+  const durations = opt('durations', '0.09,0.16,0.2,0.24').split(',').map(Number);
   const meta = await sharp(input).metadata();
   const cw = Math.floor(meta.width / gc);
   const ch = Math.floor(meta.height / gr);
@@ -120,6 +163,7 @@ async function importAttackSheet() {
     const { data } = await sharp(input).ensureAlpha().extract({ left: cx, top: cy, width: cw, height: ch }).raw().toBuffer({ resolveWithObject: true });
     const px = new Uint8ClampedArray(data);
     removeBg(px, cw, ch);
+    dropEdgeFragments(px, cw, ch);
     const b = bbox(px, cw, ch);
     if (!b) throw new Error(`${i + 1}번째 칸에서 그림을 찾지 못했습니다`);
     cells.push({ px, b, foot: footX(px, cw, b) });
@@ -163,6 +207,7 @@ async function importAttackSheet() {
     frameHeight: OUT_H,
     anchorX: Number((left / fw).toFixed(3)),
     bodyRatio: Number((body0 / fh).toFixed(3)),
+    durations,
   };
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`✔ ${id} 공격 동작: ${frames}프레임 (${gc}×${gr}), 프레임 ${outW}×${OUT_H}, ${fps}fps → ${file}`);

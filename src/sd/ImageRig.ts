@@ -4,7 +4,8 @@
  * - 대기: 발 기준 숨쉬기(늘었다 줄었다)
  * - 공격: 클래스에 맞는 몸짓 (근접 내지르기 / 저격 반동 / 시전)
  *   · manifest에 무기 끝 위치(tip)가 있으면 공격 순간 그 자리에서 빛과 반짝이가 터진다
- *   · manifest에 attack 스프라이트 시트가 있으면 그 프레임을 재생한다 (ChatGPT 등으로 만든 동작 그림)
+ *   · manifest에 attack 스프라이트 시트가 있으면 그 프레임을 재생한다.
+ *     프레임 사이는 두 장을 겹쳐 서서히 바꾸고(크로스페이드), 몸 기울기·들썩임을 얹어 부드럽게 잇는다.
  * - 피격: 붉은 번쩍임
  */
 import Phaser from 'phaser';
@@ -27,6 +28,11 @@ const MOTION: Record<ClassId, Motion> = {
 const DURATION: Record<Motion, number> = { lunge: 0.38, recoil: 0.25, cast: 0.55 };
 /** 시전 모션에서 무기 끝이 빛나는 시점 (초) */
 const CAST_PEAK = 0.2;
+/** 프레임 시트: 대기 → 첫 프레임 전환 시간, 마지막 프레임 → 대기 전환 시간 */
+const SHEET_IN = 0.06;
+const SHEET_OUT = 0.14;
+/** 각 프레임의 끝부분 몇 %를 다음 프레임과 겹칠지 */
+const BLEND = 0.35;
 
 function ensureFxTextures(scene: Phaser.Scene): void {
   if (!scene.textures.exists('sd-glow')) {
@@ -53,8 +59,14 @@ function ensureFxTextures(scene: Phaser.Scene): void {
   }
 }
 
+/** 레이어에 띄울 그림: 'idle' 또는 공격 시트의 프레임 번호 */
+type Pose = 'idle' | number;
+
 export class ImageRig extends Phaser.GameObjects.Container {
+  /** 아래 레이어 (현재 그림) */
   readonly img: Phaser.GameObjects.Image;
+  /** 위 레이어 (다음 그림이 서서히 나타남) */
+  private imgB: Phaser.GameObjects.Image;
   private baseScale = 1;
   private facingLeft = false;
   private attackStart = -1;
@@ -64,7 +76,10 @@ export class ImageRig extends Phaser.GameObjects.Container {
   private readonly fxColor: number;
   private readonly idleKey: string;
   private readonly attackKey: string | null;
-  private usingAttackSheet = false;
+  private readonly frameTimes: number[] = [];
+  private readonly sheetTotal: number = 0;
+  private poseA: Pose = 'idle';
+  private poseB: Pose | null = null;
 
   constructor(scene: Phaser.Scene, readonly id: string, readonly entry: SDImageEntry, cls: ClassId, addToScene = true) {
     super(scene, 0, 0);
@@ -72,9 +87,21 @@ export class ImageRig extends Phaser.GameObjects.Container {
     this.idleKey = sdImageKey(id);
     this.attackKey = entry.attack && scene.textures.exists(sdAttackKey(id)) ? sdAttackKey(id) : null;
     this.img = scene.make.image({ x: 0, y: 0, key: this.idleKey }, false).setOrigin(entry.anchorX, 1);
-    this.add(this.img);
+    this.imgB = scene.make.image({ x: 0, y: 0, key: this.idleKey }, false).setOrigin(entry.anchorX, 1).setVisible(false);
+    this.add([this.img, this.imgB]);
     this.motion = MOTION[cls];
     this.fxColor = entry.fxColor ? Phaser.Display.Color.HexStringToColor(entry.fxColor).color : 0xffe9a8;
+    if (this.attackKey && entry.attack) {
+      const a = entry.attack;
+      const d = a.durations && a.durations.length === a.frames ? a.durations : Array(a.frames).fill(1 / a.fps);
+      let acc = SHEET_IN;
+      for (const t of d) {
+        this.frameTimes.push(acc);
+        acc += t;
+      }
+      this.frameTimes.push(acc);
+      this.sheetTotal = acc + SHEET_OUT;
+    }
     if (addToScene) scene.add.existing(this);
   }
 
@@ -97,14 +124,32 @@ export class ImageRig extends Phaser.GameObjects.Container {
     return this.facingLeft !== (this.entry.facing === 'left') ? -1 : 1;
   }
 
-  private applyScale(sx: number, sy: number): void {
-    let s = this.baseScale;
-    if (this.usingAttackSheet && this.entry.attack) {
-      // 동작 시트는 프레임 크기가 달라서, 첫 프레임의 몸 크기가 대기 그림과 같아지도록 맞춘다
-      const idleH = this.scene.textures.get(this.idleKey).getSourceImage().height;
-      s = (this.baseScale * idleH) / (this.entry.attack.frameHeight * this.entry.attack.bodyRatio);
+  private scaleOf(pose: Pose): number {
+    if (pose === 'idle' || !this.entry.attack) return this.baseScale;
+    // 동작 시트는 프레임 크기가 달라서, 첫 프레임의 몸 크기가 대기 그림과 같아지도록 맞춘다
+    const idleH = this.scene.textures.get(this.idleKey).getSourceImage().height;
+    return (this.baseScale * idleH) / (this.entry.attack.frameHeight * this.entry.attack.bodyRatio);
+  }
+
+  private setPose(layer: Phaser.GameObjects.Image, pose: Pose): void {
+    if (pose === 'idle') {
+      if (layer.texture.key !== this.idleKey) layer.setTexture(this.idleKey);
+      layer.setOrigin(this.entry.anchorX, 1);
+    } else {
+      if (layer.texture.key !== this.attackKey) layer.setTexture(this.attackKey!, pose);
+      else layer.setFrame(pose);
+      layer.setOrigin(this.entry.attack!.anchorX, 1);
     }
-    this.img.setScale(s * sx * this.flip, s * sy);
+  }
+
+  private applyScale(sx: number, sy: number): void {
+    const f = this.flip;
+    const a = this.scaleOf(this.poseA);
+    this.img.setScale(a * sx * f, a * sy);
+    if (this.poseB !== null) {
+      const b = this.scaleOf(this.poseB);
+      this.imgB.setScale(b * sx * f, b * sy);
+    }
   }
 
   playAttack(now: number): void {
@@ -114,13 +159,17 @@ export class ImageRig extends Phaser.GameObjects.Container {
 
   flash(color: number, ms = 70): void {
     this.img.setTint(color);
-    this.scene.time.delayedCall(ms, () => this.img.clearTint());
+    this.imgB.setTint(color);
+    this.scene.time.delayedCall(ms, () => {
+      this.img.clearTint();
+      this.imgB.clearTint();
+    });
   }
 
-  /** 무기 끝 위치 (월드 좌표). manifest에 tip이 없으면 null */
+  /** 무기 끝 위치 (월드 좌표). manifest에 tip이 없거나 동작 시트 재생 중이면 null */
   tipWorld(): Phaser.Math.Vector2 | null {
     const tip = this.entry.tip;
-    if (!tip || this.usingAttackSheet) return null;
+    if (!tip || this.poseA !== 'idle') return null;
     const src = this.scene.textures.get(this.idleKey).getSourceImage();
     const lx = (tip[0] - this.entry.anchorX) * src.width * this.img.scaleX;
     const ly = (tip[1] - 1) * src.height * this.img.scaleY;
@@ -158,6 +207,50 @@ export class ImageRig extends Phaser.GameObjects.Container {
     }
   }
 
+  /** 프레임 시트 재생: 현재 프레임(A) 위에 다음 프레임(B)을 서서히 겹친다. 반환값 = 전체 진행도 0~1 */
+  private sheetPose(s: number): number {
+    const T = this.frameTimes;
+    const n = T.length - 1;
+    let a: Pose;
+    let b: Pose | null = null;
+    let mix = 0;
+    if (s < SHEET_IN) {
+      a = 'idle';
+      b = 0;
+      mix = s / SHEET_IN;
+    } else if (s >= T[n]) {
+      a = n - 1;
+      b = 'idle';
+      mix = Math.min(1, (s - T[n]) / SHEET_OUT);
+    } else {
+      let i = 0;
+      while (i < n - 1 && s >= T[i + 1]) i++;
+      a = i;
+      const u = (s - T[i]) / (T[i + 1] - T[i]);
+      if (u > 1 - BLEND) {
+        b = i + 1 < n ? i + 1 : 'idle';
+        mix = (u - (1 - BLEND)) / BLEND;
+      }
+    }
+    this.poseA = a;
+    this.poseB = b;
+    this.setPose(this.img, a);
+    if (b !== null) {
+      this.setPose(this.imgB, b);
+      this.imgB.setVisible(true).setAlpha(Phaser.Math.Easing.Sine.InOut(mix));
+    } else {
+      this.imgB.setVisible(false);
+    }
+    return s / this.sheetTotal;
+  }
+
+  private resetPose(): void {
+    this.poseA = 'idle';
+    this.poseB = null;
+    this.setPose(this.img, 'idle');
+    this.imgB.setVisible(false);
+  }
+
   tick(now: number): void {
     const t = now / 1000 + this.phase;
     const b = Math.sin(t * 2.6);
@@ -171,22 +264,20 @@ export class ImageRig extends Phaser.GameObjects.Container {
 
     if (this.attackStart >= 0) {
       const s = (now - this.attackStart) / 1000;
-      const sheet = this.attackKey ? this.entry.attack! : null;
-      const dur = sheet ? sheet.frames / sheet.fps : DURATION[this.motion];
+      const useSheet = this.attackKey !== null;
+      const dur = useSheet ? this.sheetTotal : DURATION[this.motion];
       if (s >= dur) {
         this.attackStart = -1;
-        if (this.usingAttackSheet) {
-          this.usingAttackSheet = false;
-          this.img.setTexture(this.idleKey).setOrigin(this.entry.anchorX, 1);
-        }
-      } else if (sheet && this.attackKey) {
-        // 프레임 애니메이션 재생
-        if (!this.usingAttackSheet) {
-          this.usingAttackSheet = true;
-          this.img.setTexture(this.attackKey, 0).setOrigin(sheet.anchorX, 1);
-        }
-        this.img.setFrame(Math.min(sheet.frames - 1, Math.floor(s * sheet.fps)));
-        sx = sy = 1;
+        this.resetPose();
+      } else if (useSheet) {
+        // 프레임 재생 + 프레임 사이를 잇는 은은한 몸짓
+        const p = this.sheetPose(s);
+        const wave = Math.sin(p * Math.PI);
+        const swing = Math.sin(p * Math.PI * 2);
+        rot = dir * swing * -0.035;
+        dy = -wave * h * 0.025;
+        sy *= 1 + wave * 0.02;
+        sx *= 1 - wave * 0.01;
       } else {
         const p = s / dur;
         if (this.motion === 'lunge') {
@@ -231,7 +322,9 @@ export class ImageRig extends Phaser.GameObjects.Container {
       }
     }
     this.applyScale(sx, sy);
-    this.img.setPosition(dx, dy);
-    this.img.setRotation(rot);
+    for (const layer of [this.img, this.imgB]) {
+      layer.setPosition(dx, dy);
+      layer.setRotation(rot);
+    }
   }
 }
