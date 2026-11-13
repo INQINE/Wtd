@@ -373,7 +373,7 @@ export class BattleScene extends Phaser.Scene {
     const md = this.add.rectangle(0, 0, 10, 10, 0x000000, 0.75).setOrigin(0, 0).setInteractive();
     const resume = new Button(this, 0, 0, 420, 88, '작전 계속', () => this.closeMenu(), { fontSize: 32 });
     const retry = new Button(this, 0, 0, 420, 88, '다시 하기', () => this.scene.restart({ stageId: this.stageId }), { fontSize: 32 });
-    const quit = new Button(this, 0, 0, 420, 88, '작전 포기', () => this.scene.start('title'), { fontSize: 32, fill: 0x5a1d1a });
+    const quit = new Button(this, 0, 0, 420, 88, '작전 포기', () => this.scene.start('lobby'), { fontSize: 32, fill: 0x5a1d1a });
     this.menuOverlay.add([md, resume, retry, quit]);
   }
 
@@ -1036,7 +1036,7 @@ export class BattleScene extends Phaser.Scene {
       .text(W - 120, H * 0.36 + 120, `처치 ${b.killed}/${b.totalEnemies}  ·  방어점 ${b.life}/${b.maxLife}  ·  ${Math.floor(b.time)}초`, textStyle(28, '#cccccc'))
       .setOrigin(1, 0);
     const retry = new Button(this, W / 2 - 180, H * 0.8, 320, 90, '다시 하기', () => this.scene.restart({ stageId: this.stageId }), { fontSize: 32 });
-    const back = new Button(this, W / 2 + 180, H * 0.8, 320, 90, '타이틀로', () => this.scene.start('title'), {
+    const back = new Button(this, W / 2 + 180, H * 0.8, 320, 90, '메인 화면', () => this.scene.start('lobby'), {
       fontSize: 32,
       fill: 0x7a5c12,
       stroke: COLORS.accent,

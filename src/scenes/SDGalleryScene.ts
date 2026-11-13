@@ -41,7 +41,7 @@ export class SDGalleryScene extends Phaser.Scene {
       zone.on('pointerdown', () => rig.playAttack(this.time.now));
     });
 
-    new Button(this, W - 150, 60, 240, 70, '타이틀로', () => this.scene.start('title'), { fontSize: 28 });
+    new Button(this, W - 150, 60, 240, 70, '메인 화면', () => this.scene.start('lobby'), { fontSize: 28 });
     const auto = new Button(this, W - 420, 60, 260, 70, '자동 공격: 켜짐', () => {
       this.autoAttack = !this.autoAttack;
       auto.setText(`자동 공격: ${this.autoAttack ? '켜짐' : '꺼짐'}`);
