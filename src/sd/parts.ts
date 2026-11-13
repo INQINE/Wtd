@@ -583,6 +583,26 @@ export function drawBody(g: G, s: SDSpec): void {
     // 소속 마크
     poly(g, [[-12, -44], [-9, -48], [-6, -44], [-9, -40]], o.accent, null);
   }
+  if (o.turtleneck) {
+    // 목까지 올라온 니트 깃 + 골지 무늬
+    shape(g, [[-9, -66], [9, -66], [10, -55, true], [-10, -55, true]], o.inner);
+    g.lineStyle(1, lineOf(o.inner), 0.5);
+    for (const x of [-6, -2, 2, 6]) g.lineBetween(x, -64, x, -56);
+  }
+  for (const a of s.accessories ?? []) {
+    if (a.type !== 'necklace') continue;
+    // 별 펜던트 목걸이
+    g.lineStyle(1.2, 0xd9dde3, 1);
+    g.strokePoints(curve([[-7, -55], [1, -43], [9, -55]], false), false);
+    const star: P[] = [];
+    for (let i = 0; i < 10; i++) {
+      const an = -Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 5 : 2.2;
+      star.push([1 + Math.cos(an) * r, -39 + Math.sin(an) * r, true]);
+    }
+    shape(g, star, 0xeef1f5, 0x6b7280, 1.2);
+    ellipse(g, 1, -39, 1.6, 1.6, a.color, null);
+  }
 }
 
 // ─────────────────────────── 다리 ───────────────────────────

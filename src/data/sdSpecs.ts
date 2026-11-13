@@ -73,14 +73,16 @@ export const SD_SPECS: Record<string, SDSpec> = {
     weapon: { type: 'mic', color: 0xd9dee8, accent: 0x7aa7ff },
     accessories: [{ type: 'ribbon', color: 0x7aa7ff }],
   },
+  // 2026-11-13 사진 2장 기반: 은발(라벤더 광택), 한쪽 눈을 덮는 옆으로 넘긴 앞머리, 삐친 머리,
+  // 반쯤 감은 보라색 눈, 흰 터틀넥 + 검은 재킷, 보라 주름치마, 갈색 타이츠, 별 펜던트 목걸이
   ine: {
-    hair: { color: 0x8e5cc4, style: 'long', bangs: 'split' },
-    eyes: { color: 0xb388ff, shape: 'smile' },
+    hair: { color: 0xe4e1ee, style: 'long', bangs: 'swept', ahoge: true },
+    eyes: { color: 0xc04ae0, shape: 'round' },
     mouth: 'smile',
-    outfit: { style: 'dress', main: 0xf4f0fa, inner: 0xd9c8f0, accent: 0x8e5cc4, bottom: 0xf4f0fa },
-    legs: { style: 'tights', color: 0xf1ecf8, shoes: 0x6a4596 },
-    weapon: { type: 'staff', color: 0xe6d9ff, accent: 0xb388ff },
-    accessories: [{ type: 'halo', color: 0xffe082 }],
+    outfit: { style: 'jacket', main: 0x1f2026, inner: 0xf3f1ec, accent: 0x9b6fd6, bottom: 0x4a3c8f, turtleneck: true },
+    legs: { style: 'tights', color: 0x3a2826, shoes: 0x1c1a1f },
+    weapon: { type: 'staff', color: 0xe8e4f4, accent: 0xb07cff },
+    accessories: [{ type: 'necklace', color: 0x4f6bff }],
   },
   dopamine: {
     hair: { color: 0x3dbe9f, style: 'bob', bangs: 'straight' },

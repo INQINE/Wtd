@@ -39,6 +39,7 @@ export type AccessoryType =
   | 'beret'
   | 'crown'
   | 'antenna'
+  | 'necklace'
   | 'tail'
   | 'wings';
 
@@ -70,6 +71,8 @@ export interface SDSpec {
     accent: number;
     /** 하의(치마/바지/반바지) 색 */
     bottom: number;
+    /** 터틀넥 (목까지 올라오는 이너) */
+    turtleneck?: boolean;
   };
   legs: { style: LegStyle; color: number; shoes: number };
   weapon: { type: WeaponType; color: number; accent?: number };
