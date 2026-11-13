@@ -207,6 +207,61 @@ export class ImageRig extends Phaser.GameObjects.Container {
     }
   }
 
+  /** 근접: 무기 끝을 따라 초승달 모양 베기 궤적 */
+  private slashFx(): void {
+    const p = this.tipWorld();
+    if (!p) return;
+    const k = Math.abs(this.img.displayHeight) / 300;
+    const dir = this.facingLeft ? -1 : 1;
+    const depth = (this.parentContainer?.depth ?? this.depth) + 5;
+    const g = this.scene.add.graphics().setDepth(depth).setBlendMode(Phaser.BlendModes.ADD);
+    const cx = p.x - dir * 40 * k;
+    const cy = p.y + 30 * k;
+    const R = 90 * k;
+    const st = { t: 0 };
+    this.scene.tweens.add({
+      targets: st,
+      t: 1,
+      duration: 220,
+      ease: 'Cubic.out',
+      onUpdate: () => {
+        g.clear();
+        const a0 = dir > 0 ? -2.2 : Math.PI + 2.2;
+        const sweep = 2.0 * st.t * dir;
+        for (let i = 0; i < 3; i++) {
+          g.lineStyle((10 - i * 3) * k, i === 2 ? 0xffffff : this.fxColor, (1 - st.t) * (0.5 + i * 0.25));
+          g.beginPath();
+          g.arc(cx, cy, R - i * 4 * k, a0, a0 + sweep, dir < 0);
+          g.strokePath();
+        }
+      },
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  /** 저격: 총구(무기 끝) 섬광 + 앞으로 튀는 불꽃 */
+  private muzzleFx(): void {
+    const p = this.tipWorld();
+    if (!p) return;
+    const k = Math.abs(this.img.displayHeight) / 300;
+    const dir = this.facingLeft ? -1 : 1;
+    const depth = (this.parentContainer?.depth ?? this.depth) + 5;
+    const glow = this.scene.add.image(p.x, p.y, 'sd-glow').setTint(this.fxColor).setDepth(depth).setBlendMode(Phaser.BlendModes.ADD);
+    glow.setScale(0.25 * k);
+    this.scene.tweens.add({ targets: glow, scale: 0.8 * k, alpha: 0, duration: 160, onComplete: () => glow.destroy() });
+    for (let i = 0; i < 4; i++) {
+      const s = this.scene.add.image(p.x, p.y, 'sd-star').setTint(0xffffff).setDepth(depth + 1).setScale(0.08 * k);
+      this.scene.tweens.add({
+        targets: s,
+        x: p.x + dir * (30 + Math.random() * 30) * k,
+        y: p.y + (Math.random() - 0.5) * 30 * k,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => s.destroy(),
+      });
+    }
+  }
+
   /** 프레임 시트 재생: 현재 프레임(A) 위에 다음 프레임(B)을 서서히 겹친다. 반환값 = 전체 진행도 0~1 */
   private sheetPose(s: number): number {
     const T = this.frameTimes;
@@ -288,10 +343,18 @@ export class ImageRig extends Phaser.GameObjects.Container {
           rot = dir * k * 0.06;
           sx *= 1 + Math.max(0, k) * 0.05;
           sy *= 1 - Math.max(0, k) * 0.04;
+          if (!this.fxFired && p >= 0.42) {
+            this.fxFired = true;
+            this.slashFx();
+          }
         } else if (this.motion === 'recoil') {
           const k = p < 0.15 ? p / 0.15 : 1 - (p - 0.15) / 0.85;
           dx = -dir * k * h * 0.035;
           rot = -dir * k * 0.03;
+          if (!this.fxFired) {
+            this.fxFired = true;
+            this.muzzleFx();
+          }
         } else {
           // 시전: 뒤로 젖히며 들어올림(예비) → 앞으로 내밀며 빛 방출 → 천천히 복귀
           const peak = CAST_PEAK;
