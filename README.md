@@ -6,7 +6,12 @@
 - 플랫폼: 웹 (PC/모바일 브라우저, PWA로 설치 가능)
 - 상태: **M0.5 프로토타입** (2.5D 원근 시점, 명일방주식 인게임 UI, 스킬, 임시 그래픽, 스테이지 0-1)
 
-## 실행
+## 바로 플레이
+**https://claude.ai/artifact/D3hZRwVVyL3iHKahgGpw95** (PC·폰 브라우저, claude.ai 로그인 필요 · 업데이트할 때마다 같은 링크에 새 버전이 올라감)
+
+배포용 빌드: `npm run build:web` → `.artifact/` 를 claude.ai 아티팩트로 게시
+
+## 로컬 실행
 
 ```bash
 npm install

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "sd:import": "node scripts/sd-import.mjs",
-    "sd:generate": "NODE_USE_ENV_PROXY=1 node --no-warnings scripts/sd-generate.mjs"
+    "sd:generate": "NODE_USE_ENV_PROXY=1 node --no-warnings scripts/sd-generate.mjs",
+    "build:web": "node scripts/build-web.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

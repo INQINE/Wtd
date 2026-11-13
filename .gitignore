@@ -7,3 +7,4 @@ public/assets/local/
 # SD 생성용 레퍼런스(원작 그림)와 생성 원본 — 공개 저장소에 올리지 않음
 .sd-ref/
 .sd-raw/
+.artifact/
