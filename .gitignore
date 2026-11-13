@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+# 개인 로컬 리소스 (git에 올리지 않을 이미지/음원은 여기에)
+public/assets/local/
