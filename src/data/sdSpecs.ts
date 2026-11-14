@@ -9,13 +9,16 @@ import type { OperatorDef } from './types';
 import { defaultSpec, type SDSpec } from '../sd/spec';
 
 export const SD_SPECS: Record<string, SDSpec> = {
+  // 2026-11-14 사진 기반: 금발 긴 머리(옆으로 넘긴 앞머리, 삐친 머리), 노란 삼각 머리핀, 붉은 눈, 무표정,
+  // 검은 정장 재킷 + 흰 셔츠
   jingburger: {
-    hair: { color: 0xf3c64a, style: 'bob', bangs: 'swept', ahoge: true },
-    eyes: { color: 0xe08a2e, shape: 'round' },
-    mouth: 'open',
-    outfit: { style: 'hoodie', main: 0xf0b23a, inner: 0xffffff, accent: 0x8b4a12, bottom: 0x3a2a1a },
-    legs: { style: 'bare', color: 0, shoes: 0x5a3820 },
-    weapon: { type: 'sword', color: 0xd8dde3, accent: 0xf0b23a },
+    hair: { color: 0xf3d27a, style: 'long', bangs: 'swept', ahoge: true },
+    eyes: { color: 0xe0403a, shape: 'round' },
+    mouth: 'neutral',
+    outfit: { style: 'suit', main: 0x1d1f26, inner: 0xf4f6fb, accent: 0xf2c94c, bottom: 0x1d1f26 },
+    legs: { style: 'tights', color: 0x1a1b20, shoes: 0x15161a },
+    weapon: { type: 'sword', color: 0xd8dde3, accent: 0xf2c94c },
+    accessories: [{ type: 'hairpin', color: 0xf2c94c }],
   },
   haeruseok: {
     hair: { color: 0x2f3b52, style: 'messy', bangs: 'swept' },
