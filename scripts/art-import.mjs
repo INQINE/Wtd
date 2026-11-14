@@ -8,6 +8,7 @@
  *                                                (모델이 남긴 배경 조각 정리용)
  *     --erase-poly "x,y x,y x,y;..."           결과 그림 기준(0~1) 다각형 안을 지움 (모델이 인물로 착각한 가구 등)
  *     --erase-poly-soft "x,y ...;..."          다각형 안에서 밝고 채도 높은 픽셀(금발 머리카락 등)만 남기고 지움
+ *     --fill-holes "x0,y0,x1,y1;..."          입력 그림 기준(0~1) 영역 안의 인물 안쪽 구멍(모델이 잘못 지운 얼굴 등)을 원본으로 복원
  *     --focus-x 0.5                            메인 화면에서 얼굴이 오는 가로 위치(0~1) — 가로로 넓은 그림 배치용
  *
  * 결과: public/assets/sd/<id>-art.png, manifest.json 의 <id>.art
@@ -35,6 +36,7 @@ const MAX_H = 1600;
 
 const t0 = Date.now();
 let png = await sharp(input).ensureAlpha().png().toBuffer();
+const origPng = png;
 const meta = await sharp(png).metadata();
 const corners = await sharp(png).raw().toBuffer({ resolveWithObject: true });
 const a = (x, y) => corners.data[(y * corners.info.width + x) * 4 + 3];
@@ -51,6 +53,54 @@ if (!keepBg && !alreadyTransparent) {
   png = fs.readFileSync(tmpOut);
   fs.rmSync(tmpIn);
   fs.rmSync(tmpOut);
+}
+
+// 인물 안쪽에 잘못 뚫린 구멍 복원 (--fill-holes "x0,y0,x1,y1;..." 입력 그림 기준 0~1)
+// 테두리와 이어지지 않은 투명 덩어리 중, 지정 영역 안에 있는 것을 원본 픽셀로 되살린다 (얼굴·머리 사이 등)
+const fillBoxes = (opt('fill-holes', '') || '').split(';').filter(Boolean).map((b) => b.split(',').map(Number));
+if (fillBoxes.length) {
+  const cut = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const orig = await sharp(origPng).ensureAlpha().raw().toBuffer();
+  const W = cut.info.width;
+  const H = cut.info.height;
+  const d = cut.data;
+  const tr = (i) => d[i * 4 + 3] < 128;
+  const seen = new Uint8Array(W * H);
+  let restored = 0;
+  for (let st = 0; st < W * H; st++) {
+    if (seen[st] || !tr(st)) continue;
+    const region = [];
+    let edge = false;
+    const stack = [st];
+    seen[st] = 1;
+    while (stack.length) {
+      const i = stack.pop();
+      region.push(i);
+      const x = i % W;
+      const y = (i - x) / W;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true;
+      for (const j of [x + 1 < W ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < H ? i + W : -1, y > 0 ? i - W : -1])
+        if (j >= 0 && !seen[j] && tr(j)) {
+          seen[j] = 1;
+          stack.push(j);
+        }
+    }
+    if (edge) continue;
+    // 덩어리 중심이 지정 영역 안에 있으면 복원
+    let sx = 0, sy = 0;
+    for (const i of region) {
+      sx += i % W;
+      sy += Math.floor(i / W);
+    }
+    const cx = sx / region.length / W;
+    const cy = sy / region.length / H;
+    if (!fillBoxes.some(([a, b, c, e]) => cx >= a && cx <= c && cy >= b && cy <= e)) continue;
+    for (const i of region) for (let c = 0; c < 4; c++) d[i * 4 + c] = orig[i * 4 + c];
+    restored += region.length;
+  }
+  // 복원한 구멍 가장자리의 반투명 픽셀도 원본으로
+  console.log(`  인물 안쪽 구멍 ${restored}px 복원`);
+  png = await sharp(Buffer.from(d.buffer), { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
 }
 
 // 인물과 떨어진 작은 배경 조각 제거 (가장 큰 덩어리의 3% 미만인 덩어리)
