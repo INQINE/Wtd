@@ -8,6 +8,7 @@ import type { OperatorDef } from '../data/types';
 import { createSDView, type SDView } from '../sd/factory';
 import { artFor, sdImageFor } from '../sd/registry';
 import { textStyle } from '../ui/theme';
+import { activeSquad, loadSave } from '../data/save';
 
 const INK = '#16181d';
 const INK_N = 0x16181d;
@@ -132,12 +133,7 @@ export class LobbyScene extends Phaser.Scene {
   // ───────────────────────── 비서 ─────────────────────────
 
   private pickSecretary(): OperatorDef {
-    let id: string | null = null;
-    try {
-      id = localStorage.getItem('wtd.secretary');
-    } catch {
-      id = null;
-    }
+    const id = loadSave().secretary;
     if (id && OPERATOR_MAP[id]) return OPERATOR_MAP[id];
     // 그림이 있는 멤버를 우선
     return OPERATORS.find((o) => sdImageFor(this, o.id)) ?? OPERATOR_MAP.ine ?? OPERATORS[0];
@@ -285,7 +281,13 @@ export class LobbyScene extends Phaser.Scene {
       sub: 'OPERATION',
       big: true,
       dark: true,
-      onClick: () => this.go('battle', { stageId: '0-1' }),
+      onClick: () => {
+        if (!activeSquad().length) {
+          this.showToast('편성에서 분대를 먼저 구성해 주세요');
+          return;
+        }
+        this.go('battle', { stageId: '0-1' });
+      },
     });
     // 현재 작전 정보 (작전 패널 안)
     const info = this.add.container(left + 40 * u, top + r1h - 70 * u);
@@ -304,7 +306,7 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     let y = top + r1h + gap;
-    add(left, y, bw * 0.36, r2h, { title: '편성', sub: 'SQUAD', disabled: true });
+    add(left, y, bw * 0.36, r2h, { title: '편성', sub: 'SQUAD', onClick: () => this.go('squad') });
     add(left + bw * 0.36 + gap, y, bw * 0.64 - gap, r2h, { title: '멤버', sub: 'MEMBERS', onClick: () => this.go('sd-gallery') });
     y += r2h + gap;
     add(left, y, bw * 0.36, r2h, { title: '상점', sub: 'STORE', disabled: true });

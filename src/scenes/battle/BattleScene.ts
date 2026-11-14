@@ -5,6 +5,7 @@ import { ENEMY_MAP } from '../../data/enemies';
 import { CLASS_INFO, OPERATOR_MAP } from '../../data/operators';
 import { dirFromVector, rangeTiles } from '../../data/ranges';
 import { STAGE_MAP } from '../../data/stages';
+import { activeSquad } from '../../data/save';
 import type { Dir, OperatorDef } from '../../data/types';
 import { Button } from '../../ui/button';
 import { COLORS, textStyle } from '../../ui/theme';
@@ -293,7 +294,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createDeck(): void {
-    for (const id of this.battle.stage.deck) {
+    // 편성에서 고른 분대가 덱 (비어 있으면 스테이지 기본 덱)
+    const squad = activeSquad().filter((id) => OPERATOR_MAP[id]);
+    for (const id of squad.length ? squad : this.battle.stage.deck) {
       const def = OPERATOR_MAP[id];
       const card = new DeckCard(this, def).setDepth(10100);
       card.on('pointerdown', (p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
