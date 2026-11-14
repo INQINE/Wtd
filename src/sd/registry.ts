@@ -23,6 +23,10 @@ export interface SDImageEntry {
     facing: 'left' | 'right';
     /** 아래가 잘린 구도(허벅지까지 등)면 화면 아래에 붙여서 표시 */
     croppedBottom: boolean;
+    /** 위가 잘린 구도면 화면 위로 넘치게 배치해서 잘린 경계를 숨김 */
+    croppedTop?: boolean;
+    /** 얼굴이 있는 가로 위치 (0~1) — 메인 화면에서 이 지점이 비서 자리에 오게 배치 */
+    focusX?: number;
   };
   /** 공격 동작 스프라이트 시트 (가로 한 줄) */
   attack?: {

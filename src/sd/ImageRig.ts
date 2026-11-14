@@ -207,36 +207,47 @@ export class ImageRig extends Phaser.GameObjects.Container {
     }
   }
 
-  /** 근접: 무기 끝을 따라 초승달 모양 베기 궤적 */
+  /** 근접: 캐릭터 앞쪽을 위에서 아래로 휩쓰는 초승달 베기 궤적 */
   private slashFx(): void {
-    const p = this.tipWorld();
-    if (!p) return;
-    const k = Math.abs(this.img.displayHeight) / 300;
+    const h = Math.abs(this.img.displayHeight);
     const dir = this.facingLeft ? -1 : 1;
     const depth = (this.parentContainer?.depth ?? this.depth) + 5;
+    // 회전 중심: 몸 앞쪽 가슴 높이 (컨테이너 로컬 → 월드)
+    const c = this.getWorldTransformMatrix().transformPoint(dir * h * 0.04, -h * 0.36, new Phaser.Math.Vector2()) as Phaser.Math.Vector2;
+    const sc = Math.abs(this.getWorldTransformMatrix().scaleX) || 1;
+    const R = h * 0.56 * sc;
     const g = this.scene.add.graphics().setDepth(depth).setBlendMode(Phaser.BlendModes.ADD);
-    const cx = p.x - dir * 40 * k;
-    const cy = p.y + 30 * k;
-    const R = 90 * k;
+    const a0 = Phaser.Math.DegToRad(-75);
+    const a1 = Phaser.Math.DegToRad(40);
     const st = { t: 0 };
-    this.scene.tweens.add({
-      targets: st,
-      t: 1,
-      duration: 220,
-      ease: 'Cubic.out',
-      onUpdate: () => {
-        g.clear();
-        const a0 = dir > 0 ? -2.2 : Math.PI + 2.2;
-        const sweep = 2.0 * st.t * dir;
-        for (let i = 0; i < 3; i++) {
-          g.lineStyle((10 - i * 3) * k, i === 2 ? 0xffffff : this.fxColor, (1 - st.t) * (0.5 + i * 0.25));
-          g.beginPath();
-          g.arc(cx, cy, R - i * 4 * k, a0, a0 + sweep, dir < 0);
-          g.strokePath();
-        }
-      },
-      onComplete: () => g.destroy(),
-    });
+    const draw = () => {
+      g.clear();
+      const head = Phaser.Math.Easing.Cubic.Out(Math.min(1, st.t * 1.6));
+      const tail = Phaser.Math.Easing.Quadratic.In(Math.max(0, st.t * 1.6 - 0.6));
+      const from = a0 + (a1 - a0) * tail;
+      const to = a0 + (a1 - a0) * head;
+      if (to - from < 0.02) return;
+      const outer: Phaser.Math.Vector2[] = [];
+      const inner: Phaser.Math.Vector2[] = [];
+      const N = 24;
+      for (let i = 0; i <= N; i++) {
+        const k = i / N;
+        const a = from + (to - from) * k;
+        const thick = Math.sin(k * Math.PI) * R * 0.16 * (0.4 + 0.6 * k);
+        const ax = Math.cos(a) * dir;
+        const ay = Math.sin(a);
+        outer.push(new Phaser.Math.Vector2(c.x + ax * R, c.y + ay * R));
+        inner.push(new Phaser.Math.Vector2(c.x + ax * (R - thick), c.y + ay * (R - thick)));
+      }
+      const alpha = 1 - Math.max(0, st.t - 0.55) / 0.45;
+      g.fillStyle(this.fxColor, 0.55 * alpha);
+      g.fillPoints([...outer, ...inner.reverse()], true);
+      inner.reverse();
+      // 가장자리 흰 빛
+      g.lineStyle(Math.max(2, R * 0.025), 0xffffff, 0.9 * alpha);
+      g.strokePoints(outer, false);
+    };
+    this.scene.tweens.add({ targets: st, t: 1, duration: 260, onUpdate: draw, onComplete: () => g.destroy() });
   }
 
   /** 저격: 총구(무기 끝) 섬광 + 앞으로 튀는 불꽃 */

@@ -6,6 +6,9 @@
  *   node scripts/art-import.mjs <그림> <멤버id> [--facing left|right] [--model small|medium] [--keep-bg]
  *     --erase "x0,y0,x1,y1,#rrggbb,허용치;..."   결과 그림 기준(0~1) 영역 안에서 그 색에 가까운 픽셀을 지움
  *                                                (모델이 남긴 배경 조각 정리용)
+ *     --erase-poly "x,y x,y x,y;..."           결과 그림 기준(0~1) 다각형 안을 지움 (모델이 인물로 착각한 가구 등)
+ *     --erase-poly-soft "x,y ...;..."          다각형 안에서 밝고 채도 높은 픽셀(금발 머리카락 등)만 남기고 지움
+ *     --focus-x 0.5                            메인 화면에서 얼굴이 오는 가로 위치(0~1) — 가로로 넓은 그림 배치용
  *
  * 결과: public/assets/sd/<id>-art.png, manifest.json 의 <id>.art
  */
@@ -102,6 +105,26 @@ const erases = (opt('erase', '') || '')
     return { box: p.slice(0, 4).map(Number), rgb: [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)), tol: Number(p[5] ?? 60) };
   });
 
+const parsePolys = (v) =>
+  (v || '')
+    .split(';')
+    .filter(Boolean)
+    .map((p) => p.trim().split(/\s+/).map((xy) => xy.split(',').map(Number)));
+const polys = [
+  ...parsePolys(opt('erase-poly', '')).map((pts) => ({ pts, soft: false })),
+  ...parsePolys(opt('erase-poly-soft', '')).map((pts) => ({ pts, soft: true })),
+];
+const focusX = Number(opt('focus-x', '0.5'));
+const inPoly = (x, y, poly) => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
 // 여백 자르기 (거의 투명한 픽셀은 무시)
 let x0 = W, y0 = H, x1 = -1, y1 = -1;
 for (let y = 0; y < H; y++)
@@ -118,6 +141,28 @@ if (x1 < 0) {
 }
 const cw = x1 - x0 + 1;
 const ch = y1 - y0 + 1;
+if (polys.length) {
+  let n = 0;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const k = (y * W + x) * 4;
+      if (data[k + 3] === 0) continue;
+      const nx = (x - x0) / cw;
+      const ny = (y - y0) / ch;
+      const hit = polys.filter((p) => inPoly(nx, ny, p.pts));
+      if (!hit.length) continue;
+      if (hit.every((p) => p.soft)) {
+        const r = data[k], g = data[k + 1], b = data[k + 2];
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+        if (lum > 150 && (mx - mn) / (mx || 1) > 0.35) continue;
+      }
+      data[k + 3] = 0;
+      n++;
+    }
+  console.log(`  지정 다각형 ${n}px 제거`);
+  png = await sharp(Buffer.from(data.buffer), { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
+}
 if (erases.length) {
   let n = 0;
   for (const { box, rgb, tol } of erases) {
@@ -138,6 +183,9 @@ if (erases.length) {
 let bottomTouch = 0;
 for (let x = x0; x <= x1; x++) if (data[((H - 1) * W + x) * 4 + 3] > 40) bottomTouch++;
 const croppedBottom = y1 >= H - 2 && bottomTouch > cw * 0.1;
+let topTouch = 0;
+for (let x = x0; x <= x1; x++) if (data[x * 4 + 3] > 40) topTouch++;
+const croppedTop = y0 <= 1 && topTouch > cw * 0.05;
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const file = `${id}-art.png`;
@@ -153,6 +201,6 @@ if (!manifest[id]) {
   console.error(`먼저 SD 그림을 가져와야 합니다: npm run sd:import -- <SD 그림> ${id}`);
   process.exit(1);
 }
-manifest[id].art = { file, facing, croppedBottom };
+manifest[id].art = { file, facing, croppedBottom, croppedTop, focusX };
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 console.log(`✔ ${id} 일반 그림: ${cw}×${ch} → ${file} (${((Date.now() - t0) / 1000).toFixed(0)}초${croppedBottom ? ', 아래가 잘린 구도' : ''})`);

@@ -148,9 +148,16 @@ export class LobbyScene extends Phaser.Scene {
     if (art) {
       // 일반 캐릭터 그림: 화면 아래에 붙여 크게 (아래가 잘린 구도면 화면 밖까지)
       x = W * 0.29;
-      const img = this.add.image(x, H, art.key).setOrigin(0.5, 1);
-      const targetH = art.croppedBottom ? H * 0.93 : H * 0.88;
-      this.artScale = targetH / img.height;
+      // 얼굴 위치(focusX)를 비서 자리에 맞춤. 가로로 넓은 그림은 너비도 제한
+      const fx = art.facing === 'left' ? 1 - (art.focusX ?? 0.5) : (art.focusX ?? 0.5);
+      const img = this.add.image(x, H, art.key).setOrigin(fx, 1);
+      if (art.croppedTop) {
+        // 위가 잘린 그림: 화면 위로 넘치게 (잘린 경계가 안 보이게), 왼쪽은 화면 밖으로 나가도 됨
+        this.artScale = (H * 1.04) / img.height;
+      } else {
+        const targetH = art.croppedBottom ? H * 0.93 : H * 0.88;
+        this.artScale = Math.min(targetH / img.height, (W * 0.62) / img.width);
+      }
       img.setScale(this.artScale).setFlipX(art.facing === 'left');
       this.artBaseY = art.croppedBottom ? H + 2 : H * 0.97;
       img.y = this.artBaseY;
@@ -163,7 +170,7 @@ export class LobbyScene extends Phaser.Scene {
         this.tweens.add({ targets: img, scaleX: this.artScale * 1.015, duration: 90, yoyo: true });
         this.say();
       });
-      bubbleX = x - img.displayWidth * 0.62;
+      bubbleX = x - img.displayWidth * fx - 40 * u;
       bubbleY = H * 0.5;
     } else {
       this.add.ellipse(x, y, 360 * u, 50 * u, 0x000000, 0.35);
