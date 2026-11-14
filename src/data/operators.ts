@@ -1,11 +1,12 @@
 import type { ClassId, OperatorDef } from './types';
+import { EXTRA_OPERATORS } from './roster';
 
 /**
  * 멤버(아군) 데이터 — M0 프로토타입용.
  * 스탯은 기획서 4장의 클래스 기본치를 바탕으로 한 임시값이고, 클래스 배정도 임시.
  * 퍼스널 컬러는 임시 그래픽 색깔로만 쓰인다. 자유롭게 고쳐도 됨.
  */
-export const OPERATORS: OperatorDef[] = [
+const BASE_OPERATORS: OperatorDef[] = [
   {
     id: 'jingburger',
     name: '징버거',
@@ -209,6 +210,9 @@ export const OPERATORS: OperatorDef[] = [
     skill: 'dopamine_rush',
   },
 ];
+
+/** 전체 멤버 = 직접 만든 9명 + 캐릭터 표의 임시 멤버 */
+export const OPERATORS: OperatorDef[] = [...BASE_OPERATORS, ...EXTRA_OPERATORS];
 
 export const OPERATOR_MAP: Record<string, OperatorDef> = Object.fromEntries(OPERATORS.map((o) => [o.id, o]));
 

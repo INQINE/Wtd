@@ -49,6 +49,9 @@ export interface EnemyUnit {
   alive: boolean;
   /** 방어점까지 남은 거리 */
   distLeft: number;
+  /** 감속 남은 시간 / 배율 */
+  slowTime: number;
+  slowMul: number;
 }
 
 export type BattleEvent =
@@ -292,6 +295,10 @@ export class Battle {
             this.events.push({ type: 'heal', srcUid: op.uid, tgtUid: t.uid, amount: Math.round(amount), from: { x: op.x, y: op.y }, to: { x: t.x, y: t.y } });
           }
         }
+      } else if (sk.costGain) {
+        op.sp = 0;
+        this.cost = Math.min(this.stage.maxCost, this.cost + sk.costGain);
+        this.events.push({ type: 'skill', uid: op.uid, name: `${sk.name} +${sk.costGain}`, at: { x: op.x, y: op.y } });
       } else if (sk.duration > 0) {
         this.startSkill(op);
       }
@@ -376,6 +383,8 @@ export class Battle {
       blockedBy: null,
       alive: true,
       distLeft: suffix[0],
+      slowTime: 0,
+      slowMul: 1,
     };
     this.enemies.push(e);
     this.events.push({ type: 'spawn', uid: e.uid });
@@ -404,9 +413,13 @@ export class Battle {
           }
         }
       }
+      if (e.slowTime > 0) {
+        e.slowTime -= dt;
+        if (e.slowTime <= 0) e.slowMul = 1;
+      }
       if (e.blockedBy !== null) continue;
 
-      let move = e.def.speed * dt;
+      let move = e.def.speed * (e.slowTime > 0 ? e.slowMul : 1) * dt;
       while (move > 0 && e.next < e.path.length) {
         const t = e.path[e.next];
         const dx = t.x - e.x;
@@ -544,6 +557,11 @@ export class Battle {
         for (const v of victims) {
           const amount = Math.round(calcDamage(atk * mul, dmgType, v.def.def, v.def.res));
           v.hp -= amount;
+          if (op.def.slow) {
+            v.slowTime = Math.max(v.slowTime, op.def.slow.duration);
+            v.slowMul = Math.min(v.slowMul, op.def.slow.mul);
+          }
+          if (op.def.knockback && !v.def.air) this.knockback(v, (op.def.knockback * mul) / (v.def.weight ?? 1));
           this.events.push({
             type: 'hit',
             side: 'op',
@@ -559,6 +577,33 @@ export class Battle {
         }
       }
     }
+  }
+
+  /** 적을 경로 뒤쪽으로 dist 타일만큼 밀어낸다 (저지 해제) */
+  private knockback(e: EnemyUnit, dist: number): void {
+    if (e.blockedBy !== null) {
+      const op = this.opByUid(e.blockedBy);
+      if (op) op.blocking = op.blocking.filter((u) => u !== e.uid);
+      e.blockedBy = null;
+    }
+    let left = dist;
+    while (left > 0 && e.next > 0) {
+      const p = e.path[e.next - 1];
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d <= left) {
+        e.x = p.x;
+        e.y = p.y;
+        left -= d;
+        if (e.next > 1) e.next--;
+        else break;
+      } else {
+        e.x += ((p.x - e.x) / d) * left;
+        e.y += ((p.y - e.y) / d) * left;
+        left = 0;
+      }
+    }
+    const t = e.path[e.next];
+    e.distLeft = Math.hypot(t.x - e.x, t.y - e.y) + e.suffix[e.next];
   }
 
   private cleanup(): void {

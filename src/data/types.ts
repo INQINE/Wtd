@@ -45,6 +45,10 @@ export interface OperatorDef {
   splash?: number;
   /** 비행 유닛 우선 공격 */
   airPriority?: boolean;
+  /** 맞은 적 감속 (서포터): 이동속도 배율과 지속 시간 */
+  slow?: { mul: number; duration: number };
+  /** 맞은 적을 경로 뒤로 밀어내는 거리(타일) (스페셜리스트 밀치기형) */
+  knockback?: number;
   trait: string;
   /** SKILLS 키 */
   skill: string;
@@ -75,6 +79,8 @@ export interface SkillDef {
   selfHealRatio?: number;
   /** 즉발형: 범위 안 아군 전원을 공격력 × 배율만큼 회복 */
   healAllMul?: number;
+  /** 즉발형: 코스트 즉시 획득 (뱅가드) */
+  costGain?: number;
 }
 
 export type EnemyShape = 'small' | 'circle' | 'square' | 'diamond' | 'triangle';

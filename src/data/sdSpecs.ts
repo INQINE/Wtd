@@ -96,5 +96,5 @@ export const SD_SPECS: Record<string, SDSpec> = {
 };
 
 export function sdSpecFor(def: OperatorDef): SDSpec {
-  return SD_SPECS[def.id] ?? defaultSpec(def.color, def.cls);
+  return SD_SPECS[def.id] ?? defaultSpec(def.color, def.cls, def.id);
 }

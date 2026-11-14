@@ -799,6 +799,9 @@ export class BattleScene extends Phaser.Scene {
       s.setK(f.k, this.squash, bob, this.enemyFacingLeft(e));
       s.setDepth(1000 + e.y * 100 + (e.def.air ? 60 : 1));
       s.setHp(e.hp / e.maxHp);
+      // 감속된 적은 푸르스름하게
+      if (e.slowTime > 0) s.img.setTint(0x9fd4ff);
+      else if (s.img.tintTopLeft === 0x9fd4ff) s.img.clearTint();
     }
     for (const [uid, s] of this.enemySprites) {
       if (!aliveE.has(uid)) {

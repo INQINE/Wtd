@@ -20,6 +20,8 @@ export const RANGES: Record<string, RangeOffset[]> = {
   ],
   /** 스나이퍼 기본: 앞 4열 × 3행 */
   sniper: rect(0, 3, -1, 1),
+  /** 서포터: 앞 3열 × 3행 */
+  supporter: rect(0, 2, -1, 1),
   /** 포격형 스나이퍼: 앞 5열 × 3행 */
   artillery: rect(0, 4, -1, 1),
   /** 캐스터 기본: 앞 3열 × 3행 + 정면 1칸 */

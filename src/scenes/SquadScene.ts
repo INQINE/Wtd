@@ -265,7 +265,8 @@ export class SquadScene extends Phaser.Scene {
     const top = y0 + 10 * u + 2 * h + gap + 46 * u;
     this.add.text(60 * u, top - 10 * u, '멤버 목록', textStyle(Math.round(22 * u), '#ffffff', 900)).setOrigin(0, 1);
     this.add.text(176 * u, top - 12 * u, '탭해서 분대에 넣기 / 빼기', textStyle(Math.round(16 * u), '#9aa0a6', 400)).setOrigin(0, 1);
-    this.rosterView = { x: 40 * u, y: top, w: this.W - 80 * u, h: CARD_H * u + 24 * u };
+    // 2줄짜리 멤버 목록 (카드 0.9배)
+    this.rosterView = { x: 40 * u, y: top, w: this.W - 80 * u, h: 2 * CARD_H * 0.9 * u + 36 * u };
     const maskG = this.make.graphics({}, false);
     maskG.fillStyle(0xffffff).fillRect(this.rosterView.x, this.rosterView.y, this.rosterView.w, this.rosterView.h);
     this.rosterLayer.setMask(maskG.createGeometryMask());
@@ -298,15 +299,19 @@ export class SquadScene extends Phaser.Scene {
     const u = this.u;
     const save = loadSave();
     const squad = save.squads[save.active];
-    const w = CARD_W * u;
-    const h = CARD_H * u;
+    const cs = 0.9 * u;
+    const w = CARD_W * cs;
+    const h = CARD_H * cs;
     const gap = 12 * u;
     // 정렬: 레어도 높은 순 → 이름
     const list = [...OPERATORS].sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name, 'ko'));
     list.forEach((def, i) => {
-      const cx = this.rosterView.x + 20 * u + i * (w + gap) + w / 2;
-      const cy = this.rosterView.y + 12 * u + h / 2;
-      const card = new DeckCard(this, def).setPosition(cx, cy).setScale(u);
+      // 위아래 2줄, 왼쪽부터 세로로 채움 (정렬 순서가 좌→우로 유지됨)
+      const col = Math.floor(i / 2);
+      const row = i % 2;
+      const cx = this.rosterView.x + 20 * u + col * (w + gap) + w / 2;
+      const cy = this.rosterView.y + 12 * u + row * (h + gap) + h / 2;
+      const card = new DeckCard(this, def).setPosition(cx, cy).setScale(cs);
       card.refresh(null, 0);
       const idx = squad.indexOf(def.id);
       card.on('pointerup', (p: Phaser.Input.Pointer) => {
@@ -327,7 +332,7 @@ export class SquadScene extends Phaser.Scene {
       }
       if (def.id === this.selected) this.rosterLayer.add(this.selectFrame(cx, cy, w, h));
     });
-    const contentW = 40 * u + list.length * (w + gap);
+    const contentW = 40 * u + Math.ceil(list.length / 2) * (w + gap);
     this.rosterMaxScroll = Math.max(0, contentW - this.rosterView.w);
     this.rosterScroll = Math.min(this.rosterScroll, this.rosterMaxScroll);
     this.rosterLayer.x = -this.rosterScroll;
@@ -337,9 +342,9 @@ export class SquadScene extends Phaser.Scene {
 
   private createButtons(): void {
     const u = this.u;
-    const y = this.H - 70 * u;
-    new Button(this, this.W - 480 * u, y, 220 * u, 80 * u, '비우기', () => this.clearSquad(), { fontSize: Math.round(24 * u) });
-    new Button(this, this.W - 190 * u, y, 320 * u, 80 * u, '작전 개시 ▶', () => this.startBattle(), {
+    const y = this.H - 56 * u;
+    new Button(this, this.W - 480 * u, y, 220 * u, 70 * u, '비우기', () => this.clearSquad(), { fontSize: Math.round(24 * u) });
+    new Button(this, this.W - 190 * u, y, 320 * u, 70 * u, '작전 개시 ▶', () => this.startBattle(), {
       fontSize: Math.round(28 * u),
       fill: 0x7a5c12,
       stroke: ACCENT,

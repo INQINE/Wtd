@@ -197,3 +197,61 @@ describe('스킬', () => {
     expect(Math.max(...hits)).toBe(Math.round(470 * 2.3 - 750));
   });
 });
+
+describe('새 클래스', () => {
+  const stage = (waves: StageDef['waves']): StageDef => ({
+    id: 't',
+    name: 'test',
+    map: ['hhhhhhhhh', 'R.......B', 'hhhhhhhhh'],
+    initialCost: 99,
+    maxCost: 99,
+    costRate: 0,
+    maxDeploy: 8,
+    life: 3,
+    routes: { main: { start: [1, 0], end: [1, 8] } },
+    waves,
+    deck: [],
+  });
+
+  it('서포터에게 맞은 적은 느려진다', () => {
+    const b = new Battle(stage([{ time: 0, enemy: 'wakdu_armored', count: 1, interval: 1, route: 'main' }]), OPERATOR_MAP, ENEMY_MAP);
+    b.deploy('jururu', 0, 2, 'down');
+    let slowed = false;
+    for (let i = 0; i < 8 * 30; i++) {
+      b.update(1 / 30);
+      if (b.enemies[0]?.slowTime > 0) slowed = true;
+    }
+    expect(slowed).toBe(true);
+  });
+
+  it('스페셜리스트(밀치기형)는 적을 경로 뒤로 밀어낸다', () => {
+    const b = new Battle(stage([{ time: 0, enemy: 'wakdu_soldier', count: 1, interval: 1, route: 'main' }]), OPERATOR_MAP, ENEMY_MAP);
+    const op = b.deploy('gosegu', 1, 4, 'left')!;
+    op.hp = op.maxHp = 1e9;
+    let pushed = false;
+    let lastX = 0;
+    for (let i = 0; i < 12 * 30; i++) {
+      b.update(1 / 30);
+      const e = b.enemies[0];
+      if (!e) break;
+      if (e.x < lastX - 0.2) pushed = true;
+      lastX = e.x;
+    }
+    expect(pushed).toBe(true);
+  });
+
+  it('뱅가드 스킬은 코스트를 즉시 준다', () => {
+    const st = stage([{ time: 999, enemy: 'wakdu_small', count: 1, interval: 1, route: 'main' }]);
+    st.initialCost = 20;
+    const b = new Battle(st, OPERATOR_MAP, ENEMY_MAP);
+    b.deploy('kimchimandu', 1, 3, 'right');
+    const after = b.cost;
+    for (let i = 0; i < 7 * 30; i++) b.update(1 / 30);
+    expect(b.cost).toBe(after + 8);
+  });
+
+  it('캐릭터 표의 멤버가 모두 들어 있다', () => {
+    expect(Object.keys(OPERATOR_MAP).length).toBeGreaterThanOrEqual(37);
+    for (const o of Object.values(OPERATOR_MAP)) expect(o.skill).toBeTruthy();
+  });
+});

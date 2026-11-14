@@ -25,18 +25,23 @@ export class SDGalleryScene extends Phaser.Scene {
     this.add.text(42, 92, '🖼 = 가져온 SD 이미지 · 나머지는 코드로 그린 임시 디자인', textStyle(22, COLORS.textDim, 400));
 
     const ops = data.only ? OPERATORS.filter((o) => o.id === data.only) : OPERATORS;
-    const cols = Math.min(5, ops.length);
+    // 멤버 수에 맞춰 칸 수 조절 (화면 비율 고려)
+    const cols = Math.min(ops.length, Math.max(5, Math.ceil(Math.sqrt((ops.length * (W - 80)) / (H - 220)))));
     const rows = Math.ceil(ops.length / cols);
     const cellW = (W - 80) / cols;
     const cellH = (H - 220) / rows;
-    const size = Math.min(cellW * 0.9, cellH * 0.82);
+    const size = Math.min(cellW * 0.9, cellH * 0.66);
     ops.forEach((def, i) => {
       const cx = 40 + cellW * (i % cols) + cellW / 2;
-      const cy = 150 + cellH * Math.floor(i / cols) + cellH * 0.86;
+      const cy = 140 + cellH * Math.floor(i / cols) + cellH * 0.74;
       this.add.ellipse(cx, cy, size * 0.45, size * 0.1, 0x000000, 0.35);
       const rig = createSDView(this, def).setPosition(cx, cy).setHeightPx(size);
       this.rigs.push(rig);
-      this.add.text(cx, cy + 22, def.name + (sdImageFor(this, def.id) ? '  🖼' : ''), textStyle(24, '#ffffff', 700)).setOrigin(0.5, 0);
+      const label = this.add
+        .text(cx, cy + 8, def.name + (sdImageFor(this, def.id) ? ' 🖼' : ''), textStyle(Math.round(Math.min(24, cellH * 0.13)), '#ffffff', 700))
+        .setOrigin(0.5, 0);
+      // 긴 이름은 칸 너비에 맞게 줄임
+      if (label.width > cellW * 0.95) label.setScale((cellW * 0.95) / label.width);
       const zone = this.add.zone(cx, cy - size / 2, size * 0.6, size).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => rig.playAttack(this.time.now));
     });

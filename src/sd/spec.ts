@@ -91,14 +91,20 @@ export const CLASS_WEAPON: Record<ClassId, WeaponType> = {
   specialist: 'sword',
 };
 
-/** 사양이 없는 멤버용 기본값 (퍼스널 컬러 기반) */
-export function defaultSpec(color: number, cls: ClassId): SDSpec {
+/** 사양이 없는 멤버용 기본값 (퍼스널 컬러 기반, id로 머리 모양 등을 골고루 섞음) */
+export function defaultSpec(color: number, cls: ClassId, seed = ''): SDSpec {
+  let h = 2166136261;
+  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const pick = <T,>(arr: T[], salt: number) => arr[Math.abs((h >> salt) ^ (h * (salt + 1))) % arr.length];
+  const hairStyles: HairStyle[] = ['short', 'messy', 'bob', 'long', 'twintail', 'ponytail', 'sidetail'];
+  const outfits: OutfitStyle[] = ['jacket', 'hoodie', 'coat', 'uniform', 'suit'];
+  const outfit = cls === 'defender' ? 'armor' : pick(outfits, 3);
   return {
-    hair: { color, style: 'short', bangs: 'swept', ahoge: true },
-    eyes: { color, shape: 'round' },
-    mouth: 'smile',
-    outfit: { style: 'jacket', main: 0x2b2f38, inner: 0xf2f2f2, accent: color, bottom: 0x23262d },
-    legs: { style: 'tights', color: 0x22252b, shoes: 0x1a1c20 },
+    hair: { color, style: pick(hairStyles, 1), bangs: pick<BangStyle>(['straight', 'swept', 'split'], 2), ahoge: pick([true, false], 4) },
+    eyes: { color, shape: pick<EyeShape>(['round', 'sharp', 'round', 'smile'], 5) },
+    mouth: pick<MouthShape>(['smile', 'neutral', 'open', 'cat'], 6),
+    outfit: { style: outfit, main: pick([0x2b2f38, 0x3a3f4a, 0xe9ecef, 0x1f2a44], 7), inner: 0xf2f2f2, accent: color, bottom: 0x23262d },
+    legs: { style: pick<LegStyle>(['tights', 'pants', 'socks', 'bare'], 8), color: 0x22252b, shoes: 0x1a1c20 },
     weapon: { type: CLASS_WEAPON[cls], color: 0xc9d1d9, accent: color },
   };
 }
