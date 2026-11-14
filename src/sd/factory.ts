@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { OperatorDef } from '../data/types';
 import { sdSpecFor } from '../data/sdSpecs';
 import { ImageRig } from './ImageRig';
-import { sdImageFor, sdImageKey } from './registry';
+import { artFor, sdImageFor, sdImageKey } from './registry';
 import { bakePortrait, PORTRAIT_FOOT, PORTRAIT_SIZE, SD_RES, SDRig } from './SDRig';
 
 export type SDView = SDRig | ImageRig;
@@ -61,4 +61,45 @@ export function sdPortrait(scene: Phaser.Scene, def: OperatorDef): Portrait {
     face: { x: 70 * SD_RES, y: 14 * SD_RES, w: 124 * SD_RES, h: 152 * SD_RES },
     flip: false,
   };
+}
+
+export interface CardPortrait {
+  key: string;
+  /** 텍스처 픽셀 기준 자르기 영역 (카드 비율과 같음) */
+  crop: { x: number; y: number; w: number; h: number };
+  flip: boolean;
+  /** 일반 캐릭터 그림인지 (아니면 SD로 대신) */
+  isArt: boolean;
+}
+
+/**
+ * 편성 카드용 세로 초상: 일반 캐릭터 그림을 얼굴 중심으로 자른다. 없으면 SD 초상으로 대신.
+ * aspect = 너비 / 높이
+ */
+export function cardPortrait(scene: Phaser.Scene, def: OperatorDef, aspect: number): CardPortrait {
+  const art = artFor(scene, def.id);
+  if (art) {
+    const src = scene.textures.get(art.key).getSourceImage() as HTMLImageElement;
+    const W = src.width;
+    const H = src.height;
+    const [fx, fy, showH] = art.card ?? [art.focusX ?? 0.5, 0.2, 0.62];
+    let h = H * showH;
+    let w = h * aspect;
+    if (w > W) {
+      w = W;
+      h = w / aspect;
+    }
+    const cx = (art.facing === 'left' ? 1 - fx : fx) * W;
+    const x = Phaser.Math.Clamp(cx - w / 2, 0, W - w);
+    // 얼굴이 위쪽 1/4 지점에 오도록
+    const y = Phaser.Math.Clamp(fy * H - h * 0.25, 0, H - h);
+    return { key: art.key, crop: { x, y, w, h }, flip: art.facing === 'left', isArt: true };
+  }
+  const p = sdPortrait(scene, def);
+  // SD: 전신이 카드 안에 들어오게
+  const h = p.footY * 0.98;
+  const w = Math.min(p.width, h * aspect);
+  const x = Phaser.Math.Clamp(p.footX - w / 2 + (p.flip ? -1 : 1) * w * 0.04, 0, p.width - w);
+  const y = Math.max(0, p.footY - h);
+  return { key: p.key, crop: { x, y, w, h: Math.min(h, p.height - y) }, flip: p.flip, isArt: false };
 }

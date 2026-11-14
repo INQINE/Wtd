@@ -27,6 +27,8 @@ export interface SDImageEntry {
     croppedTop?: boolean;
     /** 얼굴이 있는 가로 위치 (0~1) — 메인 화면에서 이 지점이 비서 자리에 오게 배치 */
     focusX?: number;
+    /** 편성 카드용 자르기: [얼굴 중심 x, 얼굴 중심 y, 보여줄 세로 비율] (0~1) */
+    card?: [number, number, number];
   };
   /** 공격 동작 스프라이트 시트 (가로 한 줄) */
   attack?: {

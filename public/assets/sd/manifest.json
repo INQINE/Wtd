@@ -18,7 +18,12 @@
     "art": {
       "file": "ine-art.png",
       "facing": "right",
-      "croppedBottom": true
+      "croppedBottom": true,
+      "card": [
+        0.56,
+        0.17,
+        0.55
+      ]
     }
   },
   "jingburger": {
@@ -42,7 +47,12 @@
       "facing": "right",
       "croppedBottom": true,
       "croppedTop": true,
-      "focusX": 0.66
+      "focusX": 0.66,
+      "card": [
+        0.66,
+        0.24,
+        0.82
+      ]
     }
   }
 }
