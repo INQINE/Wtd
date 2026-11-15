@@ -39,9 +39,15 @@ export class SquadScene extends Phaser.Scene {
   private drag = { active: false, startX: 0, startScroll: 0, moved: 0 };
   private toast!: Phaser.GameObjects.Text;
   private maskG!: Phaser.GameObjects.Graphics;
+  /** 돌아갈 화면 (메인 화면 또는 작전 목록) */
+  private from = 'lobby';
 
   constructor() {
     super('squad');
+  }
+
+  init(data: { from?: string }): void {
+    this.from = data?.from ?? 'lobby';
   }
 
   create(): void {
@@ -50,7 +56,7 @@ export class SquadScene extends Phaser.Scene {
     this.u = this.H / 1080;
     this.mode = 'squad';
     this.scroll = 0;
-    const onResize = () => this.scene.restart();
+    const onResize = () => this.scene.restart({ from: this.from });
     this.scale.once('resize', onResize);
     this.events.once('shutdown', () => this.scale.off('resize', onResize));
 
@@ -109,7 +115,7 @@ export class SquadScene extends Phaser.Scene {
     g.fillStyle(0x1d2026, 0.08).fillPoints([v(W * 0.55, 0), v(W, 0), v(W, H), v(W * 0.75, H)], true);
     g.fillStyle(YELLOW, 1).fillRect(0, H - 6 * u, W * 0.3, 6 * u);
     this.root.add(g);
-    this.header('편성', 'SQUAD', false, () => this.go('lobby'));
+    this.header('편성', 'SQUAD', false, () => this.go(this.from));
     this.drawTabs();
 
     // 카드 크기: 6열 × 2줄이 화면에 들어가게
@@ -160,7 +166,7 @@ export class SquadScene extends Phaser.Scene {
     const y = H - 56 * u;
     this.root.add([
       new Button(this, W - 480 * u, y, 220 * u, 70 * u, '비우기', () => this.clearSquad(), { fontSize: Math.round(24 * u), fill: 0x2a2d34 }),
-      new Button(this, W - 190 * u, y, 320 * u, 70 * u, '작전 개시 ▶', () => this.startBattle(), {
+      new Button(this, W - 190 * u, y, 320 * u, 70 * u, '작전 선택 ▶', () => this.startBattle(), {
         fontSize: Math.round(28 * u),
         fill: 0x1d2026,
         stroke: YELLOW,
@@ -375,7 +381,7 @@ export class SquadScene extends Phaser.Scene {
       this.showToast('분대가 비어 있습니다');
       return;
     }
-    this.go('battle', { stageId: '0-1' });
+    this.go('stages');
   }
 
   private go(scene: string, data?: object): void {

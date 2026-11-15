@@ -3,6 +3,7 @@
  * 분대 편성, 사용 중인 분대, 비서. 저장소를 못 쓰는 환경(시크릿 창 등)에서도 기본값으로 동작한다.
  */
 import { OPERATOR_MAP } from './operators';
+import { STAGE_MAP, STAGES } from './stages';
 
 export const SQUAD_COUNT = 4;
 export const SQUAD_SIZE = 12;
@@ -12,6 +13,10 @@ export interface SaveData {
   squads: string[][];
   active: number;
   secretary: string | null;
+  /** 스테이지별 최고 별 수 (클리어 = 1 이상) */
+  stages: Record<string, number>;
+  /** 마지막으로 고른 스테이지 */
+  lastStage: string;
 }
 
 const KEY = 'wtd.save.v1';
@@ -24,6 +29,8 @@ function defaults(): SaveData {
     squads: [DEFAULT_SQUAD.slice(), [], [], []],
     active: 0,
     secretary: null,
+    stages: {},
+    lastStage: '0-1',
   };
 }
 
@@ -51,6 +58,8 @@ export function loadSave(): SaveData {
   );
   data.active = Math.min(Math.max(0, data.active | 0), SQUAD_COUNT - 1);
   if (data.secretary && !OPERATOR_MAP[data.secretary]) data.secretary = null;
+  if (!data.stages || typeof data.stages !== 'object') data.stages = {};
+  if (!STAGE_MAP[data.lastStage]) data.lastStage = STAGES[0].id;
   cache = data;
   return data;
 }
@@ -68,4 +77,25 @@ export function writeSave(): void {
 export function activeSquad(): string[] {
   const s = loadSave();
   return s.squads[s.active];
+}
+
+/** 스테이지가 열려 있는지: 첫 스테이지이거나 바로 앞 스테이지를 클리어했으면 열림 */
+export function isUnlocked(stageId: string): boolean {
+  const i = STAGES.findIndex((s) => s.id === stageId);
+  if (i <= 0) return i === 0;
+  return (loadSave().stages[STAGES[i - 1].id] ?? 0) > 0;
+}
+
+/** 클리어 기록 저장. 최고 기록이면 true */
+export function recordClear(stageId: string, stars: number): boolean {
+  const s = loadSave();
+  const best = s.stages[stageId] ?? 0;
+  if (stars > best) s.stages[stageId] = stars;
+  writeSave();
+  return stars > best;
+}
+
+export function nextStageId(stageId: string): string | null {
+  const i = STAGES.findIndex((s) => s.id === stageId);
+  return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1].id : null;
 }

@@ -5,7 +5,7 @@ import { ENEMY_MAP } from '../../data/enemies';
 import { CLASS_INFO, OPERATOR_MAP } from '../../data/operators';
 import { dirFromVector, rangeTiles } from '../../data/ranges';
 import { STAGE_MAP } from '../../data/stages';
-import { activeSquad } from '../../data/save';
+import { activeSquad, loadSave, nextStageId, recordClear, writeSave } from '../../data/save';
 import type { Dir, OperatorDef } from '../../data/types';
 import { Button } from '../../ui/button';
 import { COLORS, textStyle } from '../../ui/theme';
@@ -61,6 +61,11 @@ export class BattleScene extends Phaser.Scene {
   private cards: DeckCard[] = [];
   private routePreviews: RoutePreview[] = [];
   private healAnimFrame = -1;
+  /** 적 uid → 피격 번쩍임이 끝나는 시각 */
+  private hitFlash = new Map<number, number>();
+  private bossBar!: Phaser.GameObjects.Container;
+  private bossFill!: Phaser.GameObjects.Rectangle;
+  private bossName!: Phaser.GameObjects.Text;
 
   // 표시 레이어
   private mapImage!: Phaser.GameObjects.Image;
@@ -112,6 +117,7 @@ export class BattleScene extends Phaser.Scene {
     this.ended = false;
     this.opSprites.clear();
     this.enemySprites.clear();
+    this.hitFlash.clear();
     this.cards = [];
   }
 
@@ -161,6 +167,7 @@ export class BattleScene extends Phaser.Scene {
 
     // 상단 중앙 (처치 수 · 방어점)
     this.topBar.setPosition(W / 2, 0);
+    this.bossBar.setPosition(W / 2, 78);
     this.speedBtn.setPosition(W - 158, 46);
     this.pauseBtn.setPosition(W - 60, 46);
     this.menuBtn.setPosition(52, 46);
@@ -263,6 +270,19 @@ export class BattleScene extends Phaser.Scene {
     this.lifeIcon = this.add.image(60, 36, 'icon-life').setScale(0.75);
     this.lifeText = this.add.text(100, 36, '', textStyle(34, '#ffffff', 900)).setOrigin(0, 0.5);
     this.topBar.add([bg, eIcon, this.killText, this.lifeIcon, this.lifeText]);
+
+    // 보스 체력바 (상단 바 아래)
+    this.bossBar = this.add.container(0, 0).setDepth(10000).setVisible(false);
+    const bbw = 620;
+    const bbg = this.add.graphics();
+    bbg.fillStyle(0x000000, 0.7).fillPoints(
+      [new Phaser.Math.Vector2(-bbw / 2 - 20, 0), new Phaser.Math.Vector2(bbw / 2 + 20, 0), new Phaser.Math.Vector2(bbw / 2 + 6, 46), new Phaser.Math.Vector2(-bbw / 2 - 6, 46)],
+      true,
+    );
+    this.bossName = this.add.text(-bbw / 2, 4, '', textStyle(18, '#e0aaff', 900));
+    const bossBg = this.add.rectangle(-bbw / 2, 34, bbw, 8, 0x3a2a4a).setOrigin(0, 0.5);
+    this.bossFill = this.add.rectangle(-bbw / 2, 34, bbw, 8, 0xb04cff).setOrigin(0, 0.5);
+    this.bossBar.add([bbg, this.bossName, bossBg, this.bossFill]);
 
     const btn = { fill: 0x000000, alpha: 0.6, stroke: 0x555555, fontSize: 28 };
     this.speedBtn = new Button(this, 0, 0, 120, 64, '1X ▶', () => this.toggleSpeed(), btn).setDepth(10000);
@@ -376,7 +396,7 @@ export class BattleScene extends Phaser.Scene {
     const md = this.add.rectangle(0, 0, 10, 10, 0x000000, 0.75).setOrigin(0, 0).setInteractive();
     const resume = new Button(this, 0, 0, 420, 88, '작전 계속', () => this.closeMenu(), { fontSize: 32 });
     const retry = new Button(this, 0, 0, 420, 88, '다시 하기', () => this.scene.restart({ stageId: this.stageId }), { fontSize: 32 });
-    const quit = new Button(this, 0, 0, 420, 88, '작전 포기', () => this.scene.start('lobby'), { fontSize: 32, fill: 0x5a1d1a });
+    const quit = new Button(this, 0, 0, 420, 88, '작전 포기', () => this.scene.start('stages'), { fontSize: 32, fill: 0x5a1d1a });
     this.menuOverlay.add([md, resume, retry, quit]);
   }
 
@@ -800,8 +820,8 @@ export class BattleScene extends Phaser.Scene {
       s.setDepth(1000 + e.y * 100 + (e.def.air ? 60 : 1));
       s.setHp(e.hp / e.maxHp);
       // 감속된 적은 푸르스름하게
-      if (e.slowTime > 0) s.img.setTint(0x9fd4ff);
-      else if (s.img.tintTopLeft === 0x9fd4ff) s.img.clearTint();
+      const hitUntil = this.hitFlash.get(e.uid) ?? 0;
+      s.setTintState(this.time.now < hitUntil ? 'hit' : e.slowTime > 0 ? 'slow' : 'normal');
     }
     for (const [uid, s] of this.enemySprites) {
       if (!aliveE.has(uid)) {
@@ -878,8 +898,7 @@ export class BattleScene extends Phaser.Scene {
         const victim = ev.side === 'op' ? this.enemySprites.get(ev.tgtUid) : this.opSprites.get(ev.tgtUid);
         if (victim instanceof OperatorSprite) victim.rig.flash(0xffb0b0);
         else if (victim) {
-          victim.img.setTint(0xff7070);
-          this.time.delayedCall(70, () => victim.img.clearTint());
+          this.hitFlash.set(ev.tgtUid, this.time.now + 70);
         }
         if (ev.side === 'op') {
           this.opSprites.get(ev.srcUid)?.rig.playAttack(this.time.now);
@@ -935,6 +954,31 @@ export class BattleScene extends Phaser.Scene {
         this.tweens.add({ targets: banner, y: p.y - 60, alpha: 0, delay: 600, duration: 500, onComplete: () => banner.destroy() });
         const f = this.footOf(ev.at.x, ev.at.y);
         this.burst(f.x, f.y, op?.def.color ?? 0xffd54a, f.k);
+        break;
+      }
+      case 'pulse': {
+        // 보스 기믹: 보라색 충격파가 바닥을 따라 퍼진다
+        const st = { t: 0 };
+        const g = this.add.graphics().setDepth(4990);
+        this.tweens.add({
+          targets: st,
+          t: 1,
+          duration: 520,
+          ease: 'Quad.out',
+          onUpdate: () => {
+            g.clear();
+            this.mapR.floorRing(g, ev.at.x, ev.at.y, 0.02, ev.radius * st.t, 0xc77dff, 1 - st.t * 0.8, 8);
+            this.mapR.floorRing(g, ev.at.x, ev.at.y, 0.02, ev.radius * st.t * 0.7, 0xffffff, (1 - st.t) * 0.6, 3);
+          },
+          onComplete: () => g.destroy(),
+        });
+        const p = this.unitPoint('enemy', ev.uid, ev.at, 1.6);
+        const banner = this.add
+          .text(p.x, p.y, ev.name, { ...textStyle(26, '#e0aaff', 900), backgroundColor: '#1a0b2ecc', padding: { x: 14, y: 6 } })
+          .setOrigin(0.5)
+          .setDepth(6000);
+        this.tweens.add({ targets: banner, y: p.y - 40, alpha: 0, delay: 500, duration: 500, onComplete: () => banner.destroy() });
+        this.cameras.main.shake(140, 0.003);
         break;
       }
       case 'leak': {
@@ -1011,6 +1055,13 @@ export class BattleScene extends Phaser.Scene {
     this.deployText.setText(`배치 가능 인원  ${b.stage.maxDeploy - b.deployedCount}`);
     this.killText.setText(`${b.killed + b.leaked}/${b.totalEnemies}`);
     this.lifeText.setText(String(b.life));
+    const boss = b.enemies.find((e) => e.def.boss);
+    this.bossBar.setVisible(!!boss);
+    if (boss) {
+      this.bossName.setText(`${boss.def.name}${boss.hp <= boss.maxHp / 2 ? '  · 격노' : ''}`);
+      this.bossFill.scaleX = Phaser.Math.Clamp(boss.hp / boss.maxHp, 0, 1);
+      this.bossFill.fillColor = boss.hp <= boss.maxHp / 2 ? 0xff4c6a : 0xb04cff;
+    }
     for (const card of this.cards) {
       if (card.visible) card.refresh(b.cardError(card.def.id), b.cooldowns[card.def.id] ?? 0);
     }
@@ -1041,13 +1092,32 @@ export class BattleScene extends Phaser.Scene {
     const stat = this.add
       .text(W - 120, H * 0.36 + 120, `처치 ${b.killed}/${b.totalEnemies}  ·  방어점 ${b.life}/${b.maxLife}  ·  ${Math.floor(b.time)}초`, textStyle(28, '#cccccc'))
       .setOrigin(1, 0);
-    const retry = new Button(this, W / 2 - 180, H * 0.8, 320, 90, '다시 하기', () => this.scene.restart({ stageId: this.stageId }), { fontSize: 32 });
-    const back = new Button(this, W / 2 + 180, H * 0.8, 320, 90, '메인 화면', () => this.scene.start('lobby'), {
-      fontSize: 32,
-      fill: 0x7a5c12,
-      stroke: COLORS.accent,
+    // 기록 저장 + 다음 스테이지
+    const newBest = won ? recordClear(this.stageId, stars) : false;
+    const next = won ? nextStageId(this.stageId) : null;
+    if (newBest) stat.setText(stat.text + '  ·  최고 기록!');
+    const btns: Button[] = [];
+    const bw = 300;
+    const defs: [string, () => void, object][] = [
+      ['다시 하기', () => this.scene.restart({ stageId: this.stageId }), { fontSize: 30 }],
+      ['작전 목록', () => this.scene.start('stages'), { fontSize: 30 }],
+    ];
+    if (next) {
+      defs.push([
+        '다음 작전 ▶',
+        () => {
+          loadSave().lastStage = next;
+          writeSave();
+          this.scene.start('stages');
+        },
+        { fontSize: 30, fill: 0x7a5c12, stroke: COLORS.accent },
+      ]);
+    }
+    defs.forEach(([label, fn, o], i) => {
+      btns.push(new Button(this, W / 2 + (i - (defs.length - 1) / 2) * (bw + 24), H * 0.8, bw, 90, label, fn, o));
     });
-    layer.add([dim, band, head, sub, starText, stat, retry, back]);
+    const [retry, back] = [btns[0], btns.slice(1)];
+    layer.add([dim, band, head, sub, starText, stat, retry, ...back]);
     layer.setAlpha(0);
     this.tweens.add({ targets: layer, alpha: 1, duration: 300 });
     head.x -= 80;

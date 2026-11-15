@@ -8,7 +8,8 @@ import type { OperatorDef } from '../data/types';
 import { createSDView, type SDView } from '../sd/factory';
 import { artFor, sdImageFor } from '../sd/registry';
 import { textStyle } from '../ui/theme';
-import { activeSquad, loadSave } from '../data/save';
+import { loadSave } from '../data/save';
+import { STAGE_MAP, STAGES } from '../data/stages';
 
 const INK = '#16181d';
 const INK_N = 0x16181d;
@@ -260,7 +261,7 @@ export class LobbyScene extends Phaser.Scene {
     bg.fillStyle(0x000000, 0.5).fillRect(0, -h / 2, w, h);
     bg.fillStyle(0xe0413a, 1).fillRect(0, -h / 2, 72 * u, h);
     const tag = this.add.text(36 * u, 0, 'NEWS', textStyle(Math.round(15 * u), '#ffffff', 900)).setOrigin(0.5).setLetterSpacing(2);
-    const t = this.add.text(88 * u, 0, '아이네 SD 추가 · 메인 화면 오픈', textStyle(Math.round(19 * u), '#e6e8eb', 700)).setOrigin(0, 0.5);
+    const t = this.add.text(88 * u, 0, '제1장 개방 · 보스 흑화 뢴트게늄 등장', textStyle(Math.round(19 * u), '#e6e8eb', 700)).setOrigin(0, 0.5);
     c.add([bg, tag, t]);
   }
 
@@ -288,19 +289,14 @@ export class LobbyScene extends Phaser.Scene {
       sub: 'OPERATION',
       big: true,
       dark: true,
-      onClick: () => {
-        if (!activeSquad().length) {
-          this.showToast('편성에서 분대를 먼저 구성해 주세요');
-          return;
-        }
-        this.go('battle', { stageId: '0-1' });
-      },
+      onClick: () => this.go('stages'),
     });
     // 현재 작전 정보 (작전 패널 안)
+    const cur = STAGE_MAP[loadSave().lastStage] ?? STAGES[0];
     const info = this.add.container(left + 40 * u, top + r1h - 70 * u);
     info.add([
       this.add.text(0, 0, '현재', textStyle(Math.round(16 * u), '#16181d', 900)).setBackgroundColor(ACCENT_S).setPadding(6 * u, 2 * u),
-      this.add.text(58 * u, -2 * u, '0-1  고멤 사무실 습격', textStyle(Math.round(22 * u), '#ffffff', 700)),
+      this.add.text(58 * u, -2 * u, `${cur.id}  ${cur.name}`, textStyle(Math.round(22 * u), '#ffffff', 700)),
       this.add.text(0, 32 * u, '텐션 ∞', textStyle(Math.round(18 * u), '#9aa0a6', 700)),
     ]);
     group.add(info);

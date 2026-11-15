@@ -73,6 +73,32 @@ export function ensureEnemyTexture(scene: Phaser.Scene, def: EnemyDef): string {
         g.strokeCircle(cx, cy, r);
         break;
       }
+      case 'runner': {
+        // 뒤로 뻗은 가시(속도감) + 머리띠
+        const rr = r * 0.88;
+        g.fillTriangle(cx - rr * 0.6, cy - rr * 0.7, cx - rr * 2.0, cy - rr * 0.9, cx - rr * 0.9, cy - rr * 0.1);
+        g.fillTriangle(cx - rr * 0.8, cy - rr * 0.1, cx - rr * 2.2, cy + rr * 0.1, cx - rr * 0.8, cy + rr * 0.5);
+        g.fillTriangle(cx - rr * 0.6, cy + rr * 0.4, cx - rr * 1.8, cy + rr * 0.95, cx - rr * 0.3, cy + rr * 0.9);
+        g.fillCircle(cx, cy, rr);
+        g.strokeCircle(cx, cy, rr);
+        g.fillStyle(0xffe066, 1);
+        g.fillRect(cx - rr, cy - rr * 0.62, rr * 2, rr * 0.22);
+        break;
+      }
+      case 'mage': {
+        g.fillCircle(cx, cy, r);
+        g.strokeCircle(cx, cy, r);
+        // 뾰족 모자
+        g.fillStyle(0x2a1648, 1);
+        g.fillTriangle(cx - r * 0.95, cy - r * 0.55, cx + r * 0.95, cy - r * 0.55, cx + r * 0.25, cy - r * 1.75);
+        g.fillEllipse(cx, cy - r * 0.55, r * 2.5, r * 0.45);
+        // 마법 구슬
+        g.fillStyle(0xc77dff, 0.35);
+        g.fillCircle(cx + r * 1.15, cy + r * 0.15, r * 0.5);
+        g.fillStyle(0xe0aaff, 1);
+        g.fillCircle(cx + r * 1.15, cy + r * 0.15, r * 0.28);
+        break;
+      }
       default: {
         g.fillCircle(cx, cy, r);
         g.strokeCircle(cx, cy, r);
@@ -84,7 +110,7 @@ export function ensureEnemyTexture(scene: Phaser.Scene, def: EnemyDef): string {
       }
     }
     // 빨간 눈
-    const ey = def.shape === 'triangle' ? cy + r * 0.25 : cy;
+    const ey = def.shape === 'triangle' ? cy + r * 0.25 : def.shape === 'mage' ? cy + r * 0.15 : cy;
     g.fillStyle(0xffffff, 1);
     g.fillEllipse(cx - r * 0.32, ey, r * 0.42, r * 0.5);
     g.fillEllipse(cx + r * 0.32, ey, r * 0.42, r * 0.5);

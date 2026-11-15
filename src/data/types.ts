@@ -83,7 +83,7 @@ export interface SkillDef {
   costGain?: number;
 }
 
-export type EnemyShape = 'small' | 'circle' | 'square' | 'diamond' | 'triangle';
+export type EnemyShape = 'small' | 'circle' | 'square' | 'diamond' | 'triangle' | 'runner' | 'mage';
 
 export interface EnemyDef {
   id: string;
@@ -107,6 +107,14 @@ export interface EnemyDef {
   /** 저지 수 소모량 (기본 1) */
   weight?: number;
   desc: string;
+  /** 보스: 화면 위에 체력바 표시 */
+  boss?: boolean;
+  /** 이 멤버의 SD를 흑화시켜서 그림으로 사용 (흑화 멤버) */
+  opSprite?: string;
+  /** 그림 크기 배율 */
+  scale?: number;
+  /** 주기적으로 주변 멤버 전원에게 피해 (보스 기믹). 체력 절반 이하면 주기가 짧아진다 */
+  pulse?: { name: string; interval: number; radius: number; atk: number; damageType: 'physical' | 'arts' | 'true' };
 }
 
 export type Cell = [row: number, col: number];
@@ -131,6 +139,10 @@ export interface WaveDef {
 export interface StageDef {
   id: string;
   name: string;
+  /** 스테이지 선택 화면 설명 */
+  desc?: string;
+  /** 추천 편성 힌트 */
+  hint?: string;
   /**
    * 맵 문자 범례
    *  # 벽   . 지상(근접 배치)   _ 길(배치 불가)
@@ -146,5 +158,6 @@ export interface StageDef {
   life: number;
   routes: Record<string, RouteDef>;
   waves: WaveDef[];
+  /** 분대가 비어 있을 때 쓰는 기본 덱 */
   deck: string[];
 }

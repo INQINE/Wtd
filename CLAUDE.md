@@ -26,7 +26,14 @@
 4. 공격 모션은 **코드로 붙이는 방식**이 표준 (프레임 시트 사용 안 함): `src/sd/ImageRig.ts`
 5. SD 도감 / 전투에서 확인 → build:web → 링크 재게시 → 커밋·푸시
 
+## 스테이지
+- 데이터: `src/data/stages.ts` (0-1 + 1장 1-1~1-5), 적: `src/data/enemies.ts`, 선택 화면: `src/scenes/StageScene.ts`
+- 스테이지를 추가·수정하면 `tests/plans.ts`에 정석 배치를 넣고 `npm test` — "아무것도 안 하면 패배, 정석 배치(스킬 없이)면 승리"를 자동 확인
+- 흑화 멤버 보스: `EnemyDef.opSprite`(멤버 SD를 보라색으로) + `pulse`(주기적 광역 피해) + `boss`(상단 체력바)
+- 기록(별, 잠금 해제)은 `src/data/save.ts`. 앞 스테이지를 깨야 다음이 열림
+
 ## 참고
+- 헤드리스 브라우저는 소프트웨어 렌더링이라 전투 화면이 5~20fps로 느리게 돈다 (게임 시간도 같이 느려짐). 화면 테스트에서 타이머를 기다릴 땐 넉넉히
 - 레퍼런스/생성 원본(`.sd-ref/`, `.sd-raw/`)은 git 제외 (원작·팬아트를 공개 저장소에 올리지 않음)
 - Node fetch로 외부 API 호출 시 `NODE_USE_ENV_PROXY=1` 필요
 - 테스트: `npm test`, 타입체크: `npx tsc --noEmit`

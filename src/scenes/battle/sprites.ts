@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { Dir, EnemyDef, OperatorDef } from '../../data/types';
 import { EN_TEX, ensureEnemyTexture } from './textures';
-import { createSDView, type SDView } from '../../sd/factory';
+import { createSDView, sdPortrait, type SDView } from '../../sd/factory';
+import { OPERATOR_MAP } from '../../data/operators';
 
 /** 체력바/스킬바 기준 크기 (k = 1칸 픽셀일 때 k=REF_K 에서 1배) */
 const REF_K = 120;
@@ -122,28 +123,67 @@ export class EnemySprite extends Phaser.GameObjects.Container {
   private hpFill: Phaser.GameObjects.Rectangle;
   private k = REF_K;
 
+  /** 기본 틴트 (흑화 멤버는 보라색으로 물들임). null = 틴트 없음 */
+  private baseTint: number | null = null;
+  private aura?: Phaser.GameObjects.Image;
+  /** 흑화 멤버 그림일 때: 텍스처에서 캐릭터 키(px) */
+  private charH = 0;
+  /** 원본 그림이 오른쪽을 보는지 (적은 진행 방향에 따라 뒤집음) */
+  private srcFlip = false;
+
   constructor(scene: Phaser.Scene, readonly def: EnemyDef) {
     super(scene, 0, 0);
-    const key = ensureEnemyTexture(scene, def);
     this.shadow = scene.add.ellipse(0, 0, 100, 100, 0x000000, def.air ? 0.25 : 0.4);
-    this.img = scene.add.image(0, 0, key).setOrigin(0.5, 0.97);
+    const op = def.opSprite ? OPERATOR_MAP[def.opSprite] : undefined;
+    if (op) {
+      // 흑화 멤버: 그 멤버의 SD를 어둡게 물들이고 보라색 오라를 두른다
+      const pt = sdPortrait(scene, op);
+      this.img = scene.add.image(0, 0, pt.key).setOrigin(pt.footX / pt.width, pt.footY / pt.height);
+      this.charH = pt.footY * (pt.width === pt.height ? 0.9 : 1);
+      this.srcFlip = pt.flip;
+      this.baseTint = 0x8f6fd6;
+      this.img.setTint(this.baseTint);
+      if (scene.textures.exists('glow')) {
+        this.aura = scene.add.image(0, 0, 'glow').setTint(0x9b30ff).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.75);
+      }
+    } else {
+      this.img = scene.add.image(0, 0, ensureEnemyTexture(scene, def)).setOrigin(0.5, 0.97);
+    }
     this.bar = scene.add.container(0, 0);
     const bw = 62;
     const bg = scene.add.rectangle(0, 0, bw + 4, 9, 0x000000, 0.75).setOrigin(0.5, 0);
     this.hpFill = scene.add.rectangle(-bw / 2, 2, bw, 5, 0xff6e40).setOrigin(0, 0);
     this.bar.add([bg, this.hpFill]).setVisible(false);
-    this.add([this.shadow, this.img, this.bar]);
+    this.add(this.aura ? [this.shadow, this.aura, this.img, this.bar] : [this.shadow, this.img, this.bar]);
     scene.add.existing(this);
   }
 
   setK(k: number, squash: number, bob: number, facingLeft: boolean): void {
     this.k = k;
+    const sc = this.def.scale ?? 1;
     const lift = this.def.air ? k * 0.55 : 0;
-    this.img.setScale((k / EN_TEX) * 0.85).setPosition(0, -lift - bob);
-    this.img.setFlipX(facingLeft);
-    this.shadow.setDisplaySize(k * 0.55, k * 0.55 * squash);
+    if (this.charH) {
+      this.img.setScale((k * 0.98 * sc) / this.charH).setPosition(0, -bob);
+      this.img.setFlipX(facingLeft !== this.srcFlip);
+      if (this.aura) {
+        const pulse = 1 + Math.sin(this.scene.time.now / 300) * 0.06;
+        this.aura.setPosition(0, -k * 0.5 * sc).setDisplaySize(k * 1.9 * sc * pulse, k * 1.9 * sc * pulse);
+      }
+    } else {
+      this.img.setScale((k / EN_TEX) * 0.85 * sc).setPosition(0, -lift - bob);
+      this.img.setFlipX(facingLeft);
+    }
+    this.shadow.setDisplaySize(k * 0.55 * sc, k * 0.55 * sc * squash);
     const bs = Phaser.Math.Clamp(k / REF_K, 0.75, 1.25);
     this.bar.setScale(bs).setPosition(0, k * 0.12);
+  }
+
+  /** 틴트: 피격(붉게) / 감속(푸르게) / 평소(기본 틴트) */
+  setTintState(state: 'hit' | 'slow' | 'normal'): void {
+    if (state === 'hit') this.img.setTint(0xff7070);
+    else if (state === 'slow') this.img.setTint(0x9fd4ff);
+    else if (this.baseTint !== null) this.img.setTint(this.baseTint);
+    else this.img.clearTint();
   }
 
   setHp(ratio: number): void {

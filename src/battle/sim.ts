@@ -52,6 +52,8 @@ export interface EnemyUnit {
   /** 감속 남은 시간 / 배율 */
   slowTime: number;
   slowMul: number;
+  /** 보스 기믹(pulse)까지 남은 시간 */
+  pulseCd: number;
 }
 
 export type BattleEvent =
@@ -74,6 +76,7 @@ export type BattleEvent =
   | { type: 'spawn'; uid: number }
   | { type: 'skill'; uid: number; name: string; at: Point }
   | { type: 'skillEnd'; uid: number }
+  | { type: 'pulse'; uid: number; name: string; at: Point; radius: number }
   | { type: 'end'; result: 'won' | 'lost' };
 
 export type DeployError = 'running' | 'deployed' | 'cooldown' | 'cost' | 'limit' | 'tile' | 'occupied';
@@ -385,6 +388,7 @@ export class Battle {
       distLeft: suffix[0],
       slowTime: 0,
       slowMul: 1,
+      pulseCd: def.pulse ? def.pulse.interval : 0,
     };
     this.enemies.push(e);
     this.events.push({ type: 'spawn', uid: e.uid });
@@ -451,7 +455,33 @@ export class Battle {
 
   private enemiesAttack(dt: number): void {
     for (const e of this.enemies) {
-      if (!e.alive || e.def.atk <= 0) continue;
+      if (!e.alive) continue;
+      const pulse = e.def.pulse;
+      if (pulse) {
+        e.pulseCd -= dt;
+        if (e.pulseCd <= 0) {
+          // 체력이 절반 이하면 주기가 짧아진다 (격노)
+          e.pulseCd = pulse.interval * (e.hp <= e.maxHp / 2 ? 0.6 : 1);
+          this.events.push({ type: 'pulse', uid: e.uid, name: pulse.name, at: { x: e.x, y: e.y }, radius: pulse.radius });
+          for (const op of this.ops) {
+            if (Math.hypot(op.x - e.x, op.y - e.y) > pulse.radius) continue;
+            const amount = Math.round(calcDamage(pulse.atk, pulse.damageType, this.opDef(op), op.def.res));
+            op.hp -= amount;
+            this.events.push({
+              type: 'hit',
+              side: 'enemy',
+              srcUid: e.uid,
+              tgtUid: op.uid,
+              damageType: pulse.damageType,
+              amount,
+              from: { x: op.x, y: op.y },
+              to: { x: op.x, y: op.y },
+              ranged: false,
+            });
+          }
+        }
+      }
+      if (e.def.atk <= 0) continue;
       e.atkCd -= dt;
       if (e.atkCd > 0) continue;
 

@@ -5,6 +5,7 @@ import { TitleScene } from './scenes/TitleScene';
 import { SDGalleryScene } from './scenes/SDGalleryScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { SquadScene } from './scenes/SquadScene';
+import { StageScene } from './scenes/StageScene';
 import { COLORS, GAME_H, GAME_W } from './ui/theme';
 
 async function waitFonts(): Promise<void> {
@@ -31,7 +32,7 @@ waitFonts().then(() => {
       height: GAME_H,
     },
     input: { activePointers: 2 },
-    scene: [BootScene, TitleScene, LobbyScene, SquadScene, BattleScene, SDGalleryScene],
+    scene: [BootScene, TitleScene, LobbyScene, StageScene, SquadScene, BattleScene, SDGalleryScene],
   });
   (window as unknown as { game: Phaser.Game }).game = game;
 });
